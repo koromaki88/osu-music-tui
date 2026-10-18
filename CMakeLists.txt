@@ -1,0 +1,69 @@
+cmake_minimum_required(VERSION 3.20)
+
+project(osu_music_player VERSION 0.1.0 LANGUAGES CXX)
+
+option(OSU_PLAYER_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+function(osu_player_set_warnings target)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Wconversion
+            -Wsign-conversion
+            -Wshadow
+        )
+    endif()
+endfunction()
+
+function(osu_player_enable_sanitizers target)
+    if(OSU_PLAYER_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+        target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+    endif()
+endfunction()
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil)
+pkg_check_modules(JSON_C REQUIRED IMPORTED_TARGET json-c)
+
+add_library(osu_player_core
+    src/library.cpp
+    src/library_loader.cpp
+    src/storage_path.cpp
+    src/track.cpp
+)
+
+target_include_directories(osu_player_core PUBLIC include)
+target_link_libraries(osu_player_core PRIVATE PkgConfig::JSON_C)
+osu_player_set_warnings(osu_player_core)
+osu_player_enable_sanitizers(osu_player_core)
+
+add_executable(osu-player
+    src/main.cpp
+    src/audio_probe.cpp
+)
+
+target_link_libraries(osu-player PRIVATE osu_player_core PkgConfig::FFMPEG)
+osu_player_set_warnings(osu-player)
+osu_player_enable_sanitizers(osu-player)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(storage-path-tests tests/storage_path_test.cpp)
+    target_link_libraries(storage-path-tests PRIVATE osu_player_core)
+    osu_player_set_warnings(storage-path-tests)
+    osu_player_enable_sanitizers(storage-path-tests)
+    add_test(NAME storage-path COMMAND storage-path-tests)
+
+    add_executable(library-tests tests/library_test.cpp)
+    target_link_libraries(library-tests PRIVATE osu_player_core)
+    osu_player_set_warnings(library-tests)
+    osu_player_enable_sanitizers(library-tests)
+    add_test(NAME library COMMAND library-tests)
+endif()
