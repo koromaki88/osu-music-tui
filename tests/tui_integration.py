@@ -1,0 +1,326 @@
+"""Exercise the real ncurses frontend with a PTY, generated audio, and dummy output."""
+
+import argparse
+import codecs
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import pty
+import select
+import signal
+import struct
+import subprocess
+import tempfile
+import termios
+import time
+import unicodedata
+import wave
+
+
+class Screen:
+    """Small VT screen reader for assertions; handles ncurses' common output sequences."""
+
+    def __init__(self, rows, columns):
+        self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        self.mode = "normal"
+        self.sequence = ""
+        self.saved = (0, 0)
+        self.last_character = " "
+        self.resize(rows, columns)
+
+    def resize(self, rows, columns):
+        self.rows, self.columns = rows, columns
+        self.cells = [[" "] * columns for _ in range(rows)]
+        self.row = self.column = 0
+
+    def put(self, character):
+        if unicodedata.combining(character):
+            return
+        width = 2 if unicodedata.east_asian_width(character) in ("W", "F") else 1
+        if self.column >= self.columns:
+            self.row = min(self.rows - 1, self.row + 1)
+            self.column = 0
+        self.cells[self.row][self.column] = character
+        if width == 2 and self.column + 1 < self.columns:
+            self.cells[self.row][self.column + 1] = ""
+        self.column += width
+        self.last_character = character
+
+    def control_sequence(self, final):
+        if self.sequence.startswith(("?", ">", "=")):
+            return  # Private terminal modes / device queries, not screen text.
+        values = [int(value) if value.isdecimal() else 0 for value in self.sequence.split(";")]
+        count = (values[0] or 1) if values else 1
+        if final in ("H", "f"):
+            self.row = max(0, min(self.rows - 1, (values[0] or 1) - 1))
+            self.column = max(0, min(self.columns - 1, ((values[1] if len(values) > 1 else 1) or 1) - 1))
+        elif final == "A":
+            self.row = max(0, self.row - count)
+        elif final == "B":
+            self.row = min(self.rows - 1, self.row + count)
+        elif final == "C":
+            self.column = min(self.columns - 1, self.column + count)
+        elif final == "D":
+            self.column = max(0, self.column - count)
+        elif final == "G":
+            self.column = max(0, min(self.columns - 1, count - 1))
+        elif final == "d":
+            self.row = max(0, min(self.rows - 1, count - 1))
+        elif final == "J":
+            mode = values[0]
+            if mode in (2, 3):
+                self.cells = [[" "] * self.columns for _ in range(self.rows)]
+            elif mode == 0:
+                self.cells[self.row][self.column:] = [" "] * (self.columns - self.column)
+                for row in range(self.row + 1, self.rows):
+                    self.cells[row] = [" "] * self.columns
+        elif final == "K":
+            mode = values[0]
+            start = 0 if mode in (1, 2) else self.column
+            stop = self.columns if mode in (0, 2) else self.column + 1
+            self.cells[self.row][start:stop] = [" "] * (stop - start)
+        elif final == "X":
+            stop = min(self.columns, self.column + count)
+            self.cells[self.row][self.column:stop] = [" "] * (stop - self.column)
+        elif final == "P":
+            line = self.cells[self.row]
+            del line[self.column:self.column + count]
+            line.extend([" "] * (self.columns - len(line)))
+        elif final == "@":
+            line = self.cells[self.row]
+            line[self.column:self.column] = [" "] * count
+            del line[self.columns:]
+        elif final == "b":
+            for _ in range(count):
+                self.put(self.last_character)
+
+    def feed(self, data):
+        for character in self.decoder.decode(data):
+            if self.mode == "charset":
+                self.mode = "normal"
+            elif self.mode == "osc":
+                if character == "\x07":
+                    self.mode = "normal"
+                elif character == "\x1b":
+                    self.mode = "osc-escape"
+            elif self.mode == "osc-escape":
+                self.mode = "normal" if character == "\\" else "osc"
+            elif self.mode == "escape":
+                if character == "[":
+                    self.sequence = ""
+                    self.mode = "csi"
+                elif character == "]":
+                    self.mode = "osc"
+                elif character in "()%":
+                    self.mode = "charset"
+                else:
+                    if character == "7":
+                        self.saved = (self.row, self.column)
+                    elif character == "8":
+                        self.row, self.column = self.saved
+                    self.mode = "normal"
+            elif self.mode == "csi":
+                if "@" <= character <= "~":
+                    self.control_sequence(character)
+                    self.mode = "normal"
+                else:
+                    self.sequence += character
+            elif character == "\x1b":
+                self.mode = "escape"
+            elif character == "\r":
+                self.column = 0
+            elif character == "\n":
+                self.row = min(self.rows - 1, self.row + 1)
+            elif character == "\b":
+                self.column = max(0, self.column - 1)
+            elif character == "\t":
+                self.column = min(self.columns - 1, (self.column // 8 + 1) * 8)
+            elif ord(character) >= 32:
+                self.put(character)
+
+    def text(self):
+        return "\n".join("".join(row) for row in self.cells)
+
+
+class Session:
+    def __init__(self, executable, library, **environment):
+        self.master, self.slave = pty.openpty()
+        self.screen = Screen(24, 100)
+        self.original_attributes = termios.tcgetattr(self.slave)
+        fcntl.ioctl(self.slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
+        self.process = subprocess.Popen(
+            [executable, "tui", str(library)], stdin=self.slave, stdout=self.slave,
+            stderr=subprocess.PIPE, start_new_session=True,
+            env=dict(os.environ, TERM="xterm-256color", LANG="C.UTF-8", LC_ALL="C.UTF-8",
+                     SDL_AUDIODRIVER="dummy") | environment,
+        )
+
+    def drain(self, duration=0.05):
+        deadline = time.monotonic() + duration
+        while time.monotonic() < deadline:
+            readable, _, _ = select.select([self.master], [], [], min(0.02, max(0, deadline - time.monotonic())))
+            if readable:
+                self.screen.feed(os.read(self.master, 65536))
+
+    def expect(self, *texts):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            self.drain()
+            if all(text in self.screen.text() for text in texts):
+                return
+            if self.process.poll() is not None:
+                break
+        raise RuntimeError(f"TUI did not display {texts!r}; screen:\n{self.screen.text()}")
+
+    def send(self, text):
+        os.write(self.master, text.encode("utf-8"))
+        self.drain(0.15)
+
+    def resize(self, rows, columns):
+        self.screen.resize(rows, columns)
+        fcntl.ioctl(self.slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+        self.process.send_signal(signal.SIGWINCH)
+
+    def finish(self, expected=0):
+        deadline = time.monotonic() + 5
+        while self.process.poll() is None and time.monotonic() < deadline:
+            self.drain()
+        if self.process.poll() is None:
+            raise RuntimeError("TUI did not exit")
+        self.drain()
+        error = self.process.stderr.read().decode("utf-8", errors="replace")
+        if self.process.returncode != expected:
+            raise RuntimeError(f"unexpected TUI exit {self.process.returncode}: {error}")
+        if error:
+            raise RuntimeError(f"TUI leaked diagnostics over the screen: {error}")
+        if termios.tcgetattr(self.slave) != self.original_attributes:
+            raise RuntimeError("TUI failed to restore terminal attributes")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *error):
+        if self.process.poll() is None:
+            self.process.kill()
+            self.process.wait(timeout=5)
+        self.process.stderr.close()
+        os.close(self.master)
+        os.close(self.slave)
+
+
+def write_library(path, records):
+    header = {"type": "header", "schema_version": 1}
+    path.write_text("\n".join(json.dumps(record, ensure_ascii=False) for record in [header, *records]) + "\n",
+                    encoding="utf-8")
+
+
+def exercise_ui(executable, library):
+    with Session(executable, library) as session:
+        session.expect("osu! music player", "Matches: 3", "State: stopped", "Alpha 日本")
+        session.send("j")
+        session.expect(">   2")
+        session.send("k")
+        session.expect(">   1")
+        session.send("\x1b[6~")  # PageDown
+        session.expect(">   3")
+        session.send("\x1bOH")   # Home
+        session.expect(">   1")
+        session.send("\n")
+        session.expect("State: playing", "Now: Artist — Alpha 日本")
+        session.send(" ")
+        session.expect("State: paused")
+        session.send("\x1bOC")  # application-cursor Right
+        session.expect("00:05")
+        session.send("+sR")
+        session.expect("Volume: 75%", "Shuffle: on", "Repeat: one")
+        session.send("/zz_missing")
+        session.expect("No matching tracks", "Matches: 0")
+        session.send("q")  # Literal text in search mode, not quit.
+        session.expect("zz_missingq")
+        session.send("\x1b")
+        session.expect("Matches: 3", "State: paused")
+        session.send("/日本")
+        session.expect("Matches: 1", "Search: 日本")
+        session.send("\x7f")
+        session.expect("Search: 日_")
+        session.send("\x15ć")  # U+0107 must not be mistaken for KEY_BACKSPACE (263).
+        session.expect("Search: ć_", "Matches: 0")
+        session.send("\x15Bêta\n")
+        session.expect("Search: Bêta", "Matches: 1", "State: paused")
+        session.send("\n")
+        session.expect("State: playing", "Now: Artist — Bêta")
+        session.send("\x1b")  # Clear the committed filter outside search mode.
+        session.expect("Matches: 3")
+        session.send("sG\n")  # Disable shuffle so the broken entry is the queue tail.
+        session.expect("State: failed", "Skipped track:")
+        session.send("g\n")
+        session.expect("State: playing", "Now: Artist — Alpha 日本")
+        session.resize(8, 30)
+        session.expect("Terminal too small")
+        session.resize(30, 120)
+        session.expect("osu! music player", "Now: Artist — Alpha 日本")
+        session.send("q")
+        session.finish()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--player-binary", default="./bin/osu-player")
+    options = parser.parse_args()
+    with tempfile.TemporaryDirectory(prefix="osu-tui-test-") as directory:
+        root = Path(directory)
+        audio = root / "generated-audio"  # Extensionless WAV; no copyrighted content.
+        with wave.open(str(audio), "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(22050)
+            output.writeframes(b"\0\0" * 22050 * 8)
+        content_hash = hashlib.sha256(audio.read_bytes()).hexdigest()
+        records = []
+        for index, title in enumerate(("Alpha 日本", "Bêta", "Z Broken\x1b[2J\nRow")):
+            records.append({"type": "track", "stable_id": str(index), "beatmap_set_id": str(index),
+                            "title": title, "artist": "Artist", "audio_filename": "audio.wav",
+                            "audio_hash": content_hash,
+                            "audio_path": str(audio if index < 2 else root / "missing")})
+        library = root / "library.ndjson"
+        write_library(library, records)
+        exercise_ui(options.player_binary, library)
+
+        empty = root / "empty.ndjson"
+        write_library(empty, [])
+        with Session(options.player_binary, empty, TERM="vt100") as session:
+            session.expect("Library is empty", "State: empty")
+            session.send("\n npsRx")
+            session.expect("State: empty")
+            session.send("q")
+            session.finish()
+
+        with Session(options.player_binary, library,
+                     SDL_AUDIODRIVER="osu-player-nonexistent-driver") as session:
+            session.expect("osu! music player")
+            session.send("\n")
+            session.expect("Audio error:", "State: failed")
+            session.send("q")
+            session.finish()
+
+        with Session(options.player_binary, library) as session:
+            session.expect("osu! music player")
+            session.process.send_signal(signal.SIGTERM)
+            session.finish(128 + signal.SIGTERM)
+
+        with Session(options.player_binary, library) as session:
+            session.expect("osu! music player")
+            session.process.send_signal(signal.SIGINT)
+            session.finish(128 + signal.SIGINT)
+
+        piped = subprocess.run([options.player_binary, "tui", str(library)], input="q",
+                               text=True, capture_output=True, timeout=10)
+        if piped.returncode != 1 or "interactive terminal" not in piped.stderr:
+            raise RuntimeError("non-TTY input/output must be rejected cleanly")
+    print("TUI PTY tests passed: keys, UTF-8 search, resize, empty library, device error, terminal cleanup")
+
+
+if __name__ == "__main__":
+    main()

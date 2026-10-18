@@ -32,6 +32,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil libswresample)
 pkg_check_modules(JSON_C REQUIRED IMPORTED_TARGET json-c)
 pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+pkg_check_modules(NCURSESW REQUIRED IMPORTED_TARGET ncursesw)
 find_package(Threads REQUIRED)
 
 add_library(osu_player_core
@@ -40,6 +41,8 @@ add_library(osu_player_core
     src/storage_path.cpp
     src/track.cpp
     src/player_controller.cpp
+    src/library_view.cpp
+    src/terminal_text.cpp
 )
 
 target_include_directories(osu_player_core PUBLIC include)
@@ -56,9 +59,9 @@ target_link_libraries(osu_player_audio PRIVATE PkgConfig::FFMPEG PkgConfig::SDL2
 osu_player_set_warnings(osu_player_audio)
 osu_player_enable_sanitizers(osu_player_audio)
 
-add_executable(osu-player src/main.cpp src/play_command.cpp)
+add_executable(osu-player src/main.cpp src/play_command.cpp src/tui_command.cpp)
 
-target_link_libraries(osu-player PRIVATE osu_player_core osu_player_audio)
+target_link_libraries(osu-player PRIVATE osu_player_core osu_player_audio PkgConfig::NCURSESW PkgConfig::FFMPEG)
 osu_player_set_warnings(osu-player)
 osu_player_enable_sanitizers(osu-player)
 
@@ -82,6 +85,14 @@ if(BUILD_TESTING)
     osu_player_set_warnings(player-controller-tests)
     osu_player_enable_sanitizers(player-controller-tests)
     add_test(NAME player-controller COMMAND player-controller-tests)
+
+    add_executable(tui-model-tests tests/tui_model_test.cpp)
+    target_link_libraries(tui-model-tests PRIVATE osu_player_core)
+    osu_player_set_warnings(tui-model-tests)
+    osu_player_enable_sanitizers(tui-model-tests)
+    add_test(NAME tui-model COMMAND tui-model-tests)
+    add_test(NAME tui COMMAND Python3::Interpreter
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/tui_integration.py --player-binary $<TARGET_FILE:osu-player>)
 
     add_executable(audio-player-tests tests/audio_player_test.cpp)
     target_link_libraries(audio-player-tests PRIVATE osu_player_audio Threads::Threads)

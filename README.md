@@ -2,7 +2,7 @@
 
 Early C++20 implementation of the plan in [`PLAN.md`](PLAN.md). The program currently
 contains a read-only Realm indexer, a library domain layer, and streaming audio playback
-with line-based controls. The ncurses TUI is not implemented yet.
+with both line-based controls and an ncurses TUI.
 
 ## Current progress
 
@@ -13,11 +13,12 @@ with line-based controls. The ncurses TUI is not implemented yet.
 - [x] Read `client.realm` through the read-only adapter
 - [x] Play audio (pause/resume, stop, seek, volume, EOF handling)
 - [x] Playback controller (queue, next/previous, shuffle, repeat, failed-track recovery)
-- [ ] Add the ncurses TUI
+- [x] Ncurses TUI (search, selection, progress, transport controls, resize handling)
+- [ ] Background indexing/refresh and XDG cache
 
 ## Current commands
 
-C++ dependencies: GCC/Clang with C++20, Make (or CMake), `pkg-config`, `json-c`, SDL2,
+C++ dependencies: GCC/Clang with C++20, Make (or CMake), `pkg-config`, `json-c`, SDL2, `ncursesw`,
 and FFmpeg development libraries (`libavformat`, `libavcodec`, `libavutil`,
 `libswresample`; FFmpeg 5+). Tests also require Python 3.11+ and the `ffmpeg` executable
 with MP3 (`libmp3lame`) and Ogg Vorbis (`libvorbis`) encoders.
@@ -120,6 +121,48 @@ Queue behavior:
 injected `AudioPlayer`. Its queue contains library indices; it has no terminal or decoder
 implementation dependencies. Call `update()` regularly on the same control thread.
 
+## Terminal UI
+
+Use the same exported library file as the queue CLI:
+
+```bash
+./bin/osu-player tui artifacts/library.ndjson
+```
+
+The UI starts **without autoplay**. It requires interactive stdin/stdout, an installed
+`TERM` entry, and preferably a UTF-8 locale (for example `LANG=C.UTF-8`). The minimum usable
+size is 50 columns × 14 rows; smaller terminals show a resize message while playback
+continues. Monochrome terminals work without colors.
+
+| Key | Action |
+|---|---|
+| `j` / `k`, Down / Up | Move selection |
+| PageDown / PageUp, `g` / `G`, Home / End | Page or jump to the first/last result |
+| Enter | Play selection |
+| Space | Pause/resume; start selection if nothing is loaded |
+| `n` / `p` | Next/previous in the playback queue |
+| Left / Right | Seek backward/forward five seconds |
+| `+` / `-` | Volume in 5% steps |
+| `s` | Toggle shuffle |
+| `R` | Cycle repeat off → one → all |
+| `x` | Stop and rewind |
+| `/` | Edit the search filter |
+| Esc | Clear the filter outside search mode |
+| `q` | Quit outside search mode |
+
+Search updates results as you type. Enter applies the filter (press Enter again to play
+the selection); Esc cancels the edit and restores the previous filter. Backspace removes
+one UTF-8 codepoint, and Ctrl-U clears the query. Search is ASCII-case-insensitive and can
+match Unicode text exactly. Filtering does **not** change the playback queue, interrupt
+audio, or hide the now-playing information.
+
+The UI stays open after queue completion or playback errors, so you can choose another
+track or retry a device. Errors appear in a status line instead of overwriting the screen.
+Metadata controls/escape sequences are neutralized and text is clipped by terminal cell
+width; complex emoji grapheme clusters are not fully modeled. Quit, Ctrl-C, SIGTERM, and
+SIGHUP restore terminal settings. No mouse support, live refresh, or automatic indexing
+is implemented yet; `r` displays a reminder to re-export/restart.
+
 Validate and display the fixture-driven library model:
 
 ```bash
@@ -209,6 +252,12 @@ terminal, or real files are needed to test queue logic. They include a 10,001-en
 all-broken queue, deterministic seeded shuffle, repeat modes, load/play/decode failures,
 paused seek recovery, and fatal device failures. Dummy-device CLI tests separately
 verify the real controller/backend integration and automatic EOF advancement.
+
+`tests/tui_model_test.cpp` tests filtering/selection with 10,001 entries, viewport bounds,
+UTF-8 clipping, and control-character sanitization without ncurses. `tests/tui_integration.py`
+opens a pseudo-terminal with generated audio and dummy output to test real key input,
+Unicode editing, resize, empty/monochrome screens, device failures, and terminal cleanup
+on quit, SIGINT, and SIGTERM. These tests never launch osu! or play audible sound.
 
 Run `make clean` before switching between regular and sanitizer Make builds.
 
