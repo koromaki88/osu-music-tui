@@ -331,9 +331,9 @@ std::vector<std::string> default_indexer_command()
     // Development layout, independent of the caller's working directory. An
     // installed adapter can instead be supplied as an executable via --indexer.
     const auto root = executable_directory.parent_path();
-    const auto local_dotnet = root / ".tools/dotnet/dotnet";
+    const auto local_dotnet = root / ".tools/dotnet10/dotnet";
     return {std::filesystem::exists(local_dotnet) ? local_dotnet.string() : "dotnet",
-            (root / "tools/osu-indexer/bin/Release/net8.0/osu-indexer.dll").string()};
+            (root / "tools/osu-indexer/bin/Release/net10.0/osu-indexer.dll").string()};
 }
 
 LibraryRefresh::LibraryRefresh(RefreshOptions options) : options_{std::move(options)}

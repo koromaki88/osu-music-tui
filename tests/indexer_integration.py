@@ -105,7 +105,7 @@ def main():
                 tempfile.TemporaryFile(mode="w+", encoding="utf-8") as displayed:
             print("Indexing offline database...", flush=True)
             subprocess.run(
-                [options.dotnet, "tools/osu-indexer/bin/Release/net8.0/osu-indexer.dll",
+                [options.dotnet, "tools/osu-indexer/bin/Release/net10.0/osu-indexer.dll",
                  "--osu-dir", str(root)],
                 check=True, stdout=indexed, timeout=options.timeout,
             )
@@ -130,7 +130,7 @@ def main():
         missing = root / "osu-player-test-nonexistent-directory"
         require(not missing.exists(), "failure-test directory already exists")
         failed = subprocess.run(
-            [options.dotnet, "tools/osu-indexer/bin/Release/net8.0/osu-indexer.dll",
+            [options.dotnet, "tools/osu-indexer/bin/Release/net10.0/osu-indexer.dll",
              "--osu-dir", str(missing)], capture_output=True, text=True, timeout=options.timeout,
         )
         require(failed.returncode != 0 and not failed.stdout and not missing.exists(),

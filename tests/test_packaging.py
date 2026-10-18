@@ -66,14 +66,20 @@ class PackagingTests(unittest.TestCase):
                          builder.FILES[1]: hashlib.sha256(payload).hexdigest().encode() + b"  image\n",
                          builder.FILES[2]: json.dumps({"architecture": "x86_64", "glibc_minimum": glibc}).encode()}
 
-                def engine(arguments, **kwargs):
-                    if arguments[1] == "cp":
-                        destination = Path(arguments[-1])
-                        destination.write_bytes(files[destination.name])
+                def container(engine, image, mounts, command):
+                    if image == builder.TOOLCHAIN:
+                        destination = next(host for host, guest, mode in mounts if guest == "/output")
+                        for name, contents in files.items():
+                            (destination / name).write_bytes(contents)
+
+                def build_toolchain(arguments, **kwargs):
+                    context = Path(arguments[-1])
+                    self.assertEqual({str(path.relative_to(context)) for path in context.rglob("*") if path.is_file()},
+                                     {"Dockerfile", "tools/install_dotnet.py"})
                     return subprocess.CompletedProcess(arguments, 0)
 
-                with patch.object(builder.subprocess, "run", side_effect=engine) as commands, \
-                        patch.object(builder.subprocess, "check_output", return_value="private-container\n"), \
+                with patch.object(builder.subprocess, "run", side_effect=build_toolchain) as commands, \
+                        patch.object(builder, "run_container", side_effect=container), \
                         patch("builtins.print"):
                     if accepted:
                         builder.build("docker", output)
@@ -82,8 +88,60 @@ class PackagingTests(unittest.TestCase):
                         with self.assertRaisesRegex(RuntimeError, "baseline"):
                             builder.build("docker", output)
                         self.assertEqual(previous.read_bytes(), b"previous working image")
-                    self.assertTrue(any(call.args[0][1:3] == ["rm", "private-container"]
-                                        for call in commands.call_args_list))
+                    self.assertEqual(commands.call_count, 1, "only the toolchain is built as an image")
+                    self.assertIn(builder.TOOLCHAIN, commands.call_args.args[0])
+                    self.assertEqual(sorted(path.name for path in output.iterdir()),
+                                     sorted(builder.FILES) if accepted else [builder.FILES[0]])
+
+    def test_disposable_container_cleanup_on_success_failure_and_interrupt(self):
+        for failure in (None, subprocess.CalledProcessError(1, ["docker", "run"]), KeyboardInterrupt()):
+            with self.subTest(failure=failure):
+                def engine(arguments, **kwargs):
+                    if arguments[1] == "run" and failure:
+                        raise failure
+                    return subprocess.CompletedProcess(arguments, 0)
+
+                with patch.object(builder.subprocess, "run", side_effect=engine) as commands:
+                    if failure:
+                        with self.assertRaises(type(failure)):
+                            builder.run_container("docker", "trusted-image", [], ["test"])
+                    else:
+                        builder.run_container("docker", "trusted-image", [], ["test"])
+                launched = commands.call_args_list[0].args[0]
+                name = launched[launched.index("--name") + 1]
+                self.assertIn("--rm", launched)
+                self.assertEqual(commands.call_args_list[-1].args[0], ["docker", "rm", "--force", name])
+
+    def test_snapshot_excludes_game_tools_artifacts_and_symlinks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "source"
+            destination = Path(temporary) / "snapshot"
+            for name in ("Makefile", "src/main.cpp", ".tools/dotnet10/dotnet", "osu.AppImage",
+                         "artifacts/private/client.realm", "tests/osu-indexer-tests/bin/test.dll"):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("test")
+            (root / "src/private.cpp").symlink_to(root / "artifacts/private/client.realm")
+            builder.source_snapshot(root, destination)
+            self.assertEqual({str(path.relative_to(destination)) for path in destination.rglob("*") if path.is_file()},
+                             {"Makefile", "src/main.cpp"})
+
+    def test_toolchain_cleanup_never_prunes_global_docker_state(self):
+        with patch.object(builder.subprocess, "run") as commands:
+            builder.cleanup("docker")
+        commands.assert_called_once_with(["docker", "image", "rm", builder.TOOLCHAIN], check=True)
+
+    def test_failed_build_keeps_release_and_removes_host_staging(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            for name in builder.FILES:
+                (output / name).write_bytes(b"previous release")
+            with patch.object(builder.subprocess, "run"), \
+                    patch.object(builder, "run_container", side_effect=subprocess.CalledProcessError(1, ["test"])):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    builder.build("docker", output)
+            self.assertEqual(sorted(path.name for path in output.iterdir()), sorted(builder.FILES))
+            self.assertTrue(all((output / name).read_bytes() == b"previous release" for name in builder.FILES))
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parent.parent
 TOOL_URL = "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
 TOOL_SHA256 = "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
-RUNTIME_VERSION = "8.0.32"
+RUNTIME_VERSION = "10.0.13"
 GLIBC_LIBRARIES = {
     "libc.so.6", "libm.so.6", "libmvec.so.1", "libdl.so.2", "libpthread.so.0",
     "librt.so.1", "libresolv.so.2", "libutil.so.1", "libanl.so.1",

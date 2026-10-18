@@ -69,6 +69,7 @@ def main():
             launcher = str(appdir / "AppRun")
             runtime = json.loads((appdir / "usr/lib/osu-player/indexer/osu-indexer.runtimeconfig.json").read_text())
             assert "framework" not in runtime["runtimeOptions"], "indexer must be self-contained"
+            assert runtime["runtimeOptions"]["tfm"] == "net10.0"
             with Session(launcher, arguments=["--osu-dir", str(source), "--no-cache"]) as session:
                 session.expect("Library: 2", "Library indexed.")
                 session.send("r")

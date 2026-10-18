@@ -22,7 +22,7 @@ def fingerprint(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path,
-                        default=ROOT / "artifacts/arch/osu-music-player-0.1.0-1-x86_64.pkg.tar.zst")
+                        default=ROOT / "artifacts/arch/osu-music-player-0.1.0-2-x86_64.pkg.tar.zst")
     parser.add_argument("--dotnet", default="dotnet")
     options = parser.parse_args()
     package = options.package.resolve()
@@ -35,11 +35,12 @@ def main():
         unpacked.mkdir()
         subprocess.run(["bsdtar", "-xf", str(package), "-C", str(unpacked)], check=True)
         metadata = (unpacked / ".PKGINFO").read_text()
-        assert "depend = dotnet-runtime-8.0" in metadata
+        assert "depend = dotnet-runtime-10.0" in metadata
         assert "depend = libavcodec.so=" in metadata, "FFmpeg ABI dependency is missing"
         indexer = unpacked / "usr/lib/osu-player/indexer"
         config = json.loads((indexer / "osu-indexer.runtimeconfig.json").read_text())
         assert config["runtimeOptions"]["framework"]["name"] == "Microsoft.NETCore.App"
+        assert config["runtimeOptions"]["tfm"] == "net10.0"
         assert not (indexer / "libcoreclr.so").exists(), "must use the system runtime"
         assert not (indexer / "runtimes").exists(), "foreign RID assets should not be shipped"
         player = str(unpacked / "usr/bin/osu-player")

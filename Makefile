@@ -1,6 +1,6 @@
 CXX ?= c++
 PKG_CONFIG ?= pkg-config
-DOTNET ?= $(if $(wildcard .tools/dotnet/dotnet),.tools/dotnet/dotnet,dotnet)
+DOTNET ?= $(if $(wildcard .tools/dotnet10/dotnet),.tools/dotnet10/dotnet,dotnet)
 OSU_DIR ?= $(HOME)/.local/share/osu
 INTEGRATION_TIMEOUT ?= 300
 INTEGRATION_VERIFY ?= quick
@@ -30,7 +30,7 @@ CONTROLLER_TEST_OBJECTS := obj/player_controller_test.o $(CORE_OBJECTS)
 TUI_TEST_OBJECTS := obj/tui_model_test.o $(CORE_OBJECTS)
 DEPENDENCY_FILES := $(PLAYER_OBJECTS:.o=.d) $(STORAGE_TEST_OBJECTS:.o=.d) $(LIBRARY_TEST_OBJECTS:.o=.d) $(AUDIO_TEST_OBJECTS:.o=.d) $(CONTROLLER_TEST_OBJECTS:.o=.d) $(TUI_TEST_OBJECTS:.o=.d)
 
-.PHONY: all test clean indexer test-indexer test-integration _test _test-indexer _test-integration release appimage appimage-local test-appimage _test-appimage arch-package test-arch-package _test-arch-package
+.PHONY: all test clean indexer test-indexer test-integration _test _test-indexer _test-integration release appimage appimage-local test-appimage _test-appimage arch-package test-arch-package _test-arch-package clean-appimage-toolchain
 
 all: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-tests bin/player-controller-tests bin/tui-model-tests
 
@@ -44,6 +44,9 @@ $(RELEASE_DIR)/osu-player: $(RELEASE_SOURCES) $(wildcard include/osu_player/*.hp
 
 appimage:
 	python3 tools/build_appimage.py --engine "$(CONTAINER_ENGINE)"
+
+clean-appimage-toolchain:
+	python3 tools/build_appimage.py --engine "$(CONTAINER_ENGINE)" --clean-toolchain
 
 appimage-local: release
 	python3 tools/package_appimage.py --player-binary "$(RELEASE_DIR)/osu-player" --dotnet "$(DOTNET)"

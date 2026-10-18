@@ -1,6 +1,6 @@
 # Bundled dependencies
 
-This local AppImage bundles the C++ player, the Realm .NET adapter, .NET 8, and
+This local AppImage bundles the C++ player, the Realm .NET adapter, .NET 10, and
 native libraries collected from the build machine. glibc and the dynamic loader
 are deliberately not bundled. Linux audio services/drivers remain host-provided.
 

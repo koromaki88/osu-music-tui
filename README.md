@@ -20,7 +20,7 @@ with both line-based controls and an ncurses TUI.
 ## Standalone application
 
 The distributable is **one executable file**, including the C++ player, self-contained
-.NET 8 indexer, Realm, FFmpeg, SDL, ncurses, json-c, and native application dependencies.
+.NET 10 indexer, Realm, FFmpeg, SDL, ncurses, json-c, and native application dependencies.
 End users do not need the source directory, a compiler, an SDK, or a separate .NET install.
 
 After obtaining `osu-player-x86_64.AppImage`, close lazer and run it from a terminal:
@@ -68,11 +68,14 @@ make appimage CONTAINER_ENGINE=podman
 ```
 
 No native compiler/.NET installation is needed on the host for this container build.
-The first build downloads the pinned .NET SDK base image, distro build dependencies,
-NuGet dependencies, and checksum-verified appimagetool 1.9.1. Later builds reuse container
-layers. The builder never launches osu! or reads your real library. Build context is
-allowlisted by `.dockerignore`, excluding caches, `.tools/`, the game AppImage, and local
-artifacts. The final artifact is smoke-tested in a separate minimal Debian container
+The first build downloads the pinned Debian base image, checksum-verified .NET 10 SDK, distro build dependencies,
+NuGet dependencies, and checksum-verified appimagetool 1.9.1. Later builds reuse one
+toolchain image; compilation, tests, NuGet downloads, and AppImage extraction run in
+disposable containers, **not cached Docker image layers**. The builder never launches
+osu! or reads your real library. Only the Dockerfile and SDK installer enter the image
+build context. Project sources arrive as an explicitly allowlisted, read-only snapshot,
+excluding caches, `.tools/`, the game AppImage, and local artifacts. The final artifact is
+smoke-tested in a separate disposable minimal Debian container
 with **no installed .NET or application libraries**, using a synthetic Realm fixture.
 
 Outputs:
@@ -93,15 +96,47 @@ alone still needs native libraries and an external indexer.
 
 `make test-appimage` builds the image, runs the synthetic indexer tests, and verifies
 relocation, actual packaged indexing with no `dotnet` on PATH, and generated-audio PTY
-playback inside the container build (cached successful layers may be reused). No host
+playback inside a disposable container on every build. No host
 .NET installation is required. Its output is saved to `artifacts/test-appimage.log`. The default `make test`
 includes lightweight packaging safety tests but does not download/build an AppImage.
+
+### Build disk usage
+
+Use `make test` for ordinary development; run `make appimage` when you actually need a
+new distributable. The AppImage workflow keeps one reusable image named
+`osu-player-appimage-toolchain:net10-debian12`, plus the small Debian base image.
+Source edits no longer accumulate compilation/test/package layers. Temporary source
+copies, NuGet caches, compiled files, and extracted images are removed when the build
+container exits; no persistent Docker volumes are created. Outputs replace the previous
+three files in `artifacts/dist/`, only after tests and checksum/baseline validation pass.
+This trades some extra restore/compile time for bounded storage across source-only builds.
+The toolchain and temporary working space still require disk space during a build.
+
+Inspect Docker storage with `docker system df` and `docker image ls`. To remove **only
+this project's reusable toolchain image**, use:
+
+```bash
+make clean-appimage-toolchain
+```
+
+The next AppImage build recreates it. This does not delete release artifacts, unrelated
+images/containers/volumes, or globally prune Docker caches. Docker/BuildKit may retain
+toolchain-build cache, particularly after SDK/dependency upgrades; this target does not
+promise to purge that cache or old layers left by the earlier packaging workflow.
+Review existing Docker data separately before any one-time cleanup. Avoid blindly
+running `docker system prune -a --volumes`, which can remove other projects' data.
+
+The local SDKs in `.tools/` are separate from Docker storage and remain until explicitly
+removed. `make clean` removes normal C++ build outputs only. Docker bind mounts require
+a local engine that can access this checkout's filesystem. Podman uses `keep-id` for
+the unprivileged build; Docker builds also run as your host UID/GID, so outputs aren't
+left owned by root. Successful and failed containers are automatically removed.
 
 **Release caveats:** the current package is a local unsigned build, not a published
 download. Dependency notices/available license texts and a manifest are embedded, but
 public redistribution still needs a license/source-compliance review (especially the
 system FFmpeg build) and an application-license decision; see
-[`packaging/THIRD_PARTY.md`](packaging/THIRD_PARTY.md). .NET 8.0.32 and base/tool digests
+[`packaging/THIRD_PARTY.md`](packaging/THIRD_PARTY.md). .NET 10.0.13, SDK 10.0.402, and base/tool digests
 are pinned; update them deliberately for security releases. Optional .NET LTTng tracing
 is omitted. Settings persistence is still a separate, unimplemented QoL feature.
 
@@ -116,14 +151,15 @@ is needed to run it.
 Install the generated local package, then close lazer and start the player:
 
 ```bash
-sudo pacman -U artifacts/arch/osu-music-player-0.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U artifacts/arch/osu-music-player-0.1.0-2-x86_64.pkg.tar.zst
 osu-player tui
 ```
 
 Pacman resolves missing runtime dependencies from your configured repositories:
 FFmpeg, SDL2 (provided by `sdl2-compat` on current Arch), ncurses, json-c, and
-`dotnet-runtime-8.0`, plus their dependencies. Unlike the AppImage, this package
-**does require the system .NET 8 runtime**, but no SDK is needed by end users.
+`dotnet-runtime-10.0` (also provided by current Arch's `dotnet-runtime`), plus their
+dependencies. Unlike the AppImage, this package **does require the system .NET 10
+runtime**, but no SDK is needed by end users.
 It does not bundle copies of system libraries. Explicit FFmpeg SONAME dependencies
 prevent silently using an incompatible FFmpeg major version.
 
@@ -139,7 +175,7 @@ Install development dependencies explicitly (the builder never runs sudo or chan
 your installed packages):
 
 ```bash
-sudo pacman -Syu --needed base-devel python dotnet-sdk-8.0 ffmpeg json-c sdl2-compat ncurses
+sudo pacman -Syu --needed base-devel python dotnet-sdk-10.0 ffmpeg json-c sdl2-compat ncurses
 make arch-package
 ```
 
@@ -238,12 +274,12 @@ To create that export on this VM (close lazer first):
 ```bash
 make indexer
 mkdir -p artifacts
-.tools/dotnet/dotnet tools/osu-indexer/bin/Release/net8.0/osu-indexer.dll \
+.tools/dotnet10/dotnet tools/osu-indexer/bin/Release/net10.0/osu-indexer.dll \
   --osu-dir "$HOME/.local/share/osu" > artifacts/library.ndjson.tmp &&
   mv artifacts/library.ndjson.tmp artifacts/library.ndjson
 ```
 
-Use `dotnet` instead of `.tools/dotnet/dotnet` with a system SDK. The temporary-file/rename
+Use `dotnet` instead of `.tools/dotnet10/dotnet` with a system SDK. The temporary-file/rename
 pattern keeps a failed indexing attempt from replacing a usable export. These are local
 metadata files; `artifacts/` is gitignored. `queue` accepts a file, not `-`: stdin is reserved
 for interactive controls.
@@ -341,7 +377,7 @@ Without `--osu-dir`, `tui` uses `$HOME/.local/share/osu`. An explicit `--osu-dir
 overrides this; `tui FILE.ndjson` still opens an exported library instead.
 
 The default adapter command uses the built Release DLL under `tools/osu-indexer/` and
-the local `.tools/dotnet/dotnet` if present, otherwise `dotnet` on PATH. Paths are resolved
+the local `.tools/dotnet10/dotnet` if present, otherwise `dotnet` on PATH. Paths are resolved
 relative to the player's development build location, not the shell's working directory.
 For another installation, pass `--indexer /absolute/path/to/osu-indexer` (an executable
 or wrapper accepting `--osu-dir DIRECTORY`, not a shell command string or a DLL).
@@ -392,9 +428,16 @@ their display artist and title.
 while the game writes to it is not a supported live snapshot. The game is never launched
 by this project.
 
-The adapter requires .NET 8 and pins Realm .NET 20.1.0 with NuGet lock files. This VM has a
-local SDK in `.tools/dotnet`; Make uses it automatically, otherwise it uses `dotnet` from
-`PATH`. You can override the executable with `make DOTNET=/path/to/dotnet indexer`.
+The adapter targets .NET 10 LTS and pins Realm .NET 20.1.0 with NuGet lock files. Make
+uses `.tools/dotnet10/dotnet` when present, otherwise `dotnet` from `PATH`. You can override
+the executable with `make DOTNET=/path/to/dotnet indexer`. Building needs a .NET 10 SDK;
+running the framework-dependent adapter needs only the .NET 10 runtime.
+
+For a private Linux x86-64 SDK without a system install, run
+`python3 tools/install_dotnet.py`. It downloads SDK 10.0.402, verifies its pinned SHA-512,
+and installs under `.tools/dotnet10/`; it refuses to overwrite an existing SDK. Older
+SDKs under `.tools/dotnet/` are left untouched and are no longer selected automatically.
+The AppImage bundles runtime 10.0.13; Arch uses pacman's maintained .NET 10 runtime.
 
 ```bash
 make indexer
@@ -431,11 +474,11 @@ To display the real library using this VM's local SDK:
 
 ```bash
 set -o pipefail
-.tools/dotnet/dotnet tools/osu-indexer/bin/Release/net8.0/osu-indexer.dll \
+.tools/dotnet10/dotnet tools/osu-indexer/bin/Release/net10.0/osu-indexer.dll \
   --osu-dir "$HOME/.local/share/osu" | ./bin/osu-player library -
 ```
 
-With a system SDK, replace `.tools/dotnet/dotnet` with `dotnet`. Pass a search argument
+With a system SDK, replace `.tools/dotnet10/dotnet` with `dotnet`. Pass a search argument
 after `-` to filter. Build separately: build logs must not be mixed with NDJSON stdout.
 
 The adapter opens only its private temporary copy with Realm, in dynamic read-only mode.

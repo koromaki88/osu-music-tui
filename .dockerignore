@@ -21,6 +21,8 @@ tools/**
 !tools/package_appimage.py
 !tools/build_appimage.py
 !tools/build_arch_package.py
+!tools/install_dotnet.py
+!tools/run_appimage_build.py
 !packaging/arch/
 packaging/arch/**
 !packaging/arch/PKGBUILD

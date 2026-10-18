@@ -24,7 +24,8 @@ def source_files(root):
                 "tools/osu-indexer/packages*.lock.json", "tools/*appimage.py",
                 "packaging/osu-player.desktop", "packaging/osu-player.svg",
                 "packaging/arch/LICENSE-NOTICE", "packaging/arch/PKGBUILD",
-                "tools/build_arch_package.py")
+                "tools/build_arch_package.py", "tools/install_dotnet.py",
+                "tools/run_appimage_build.py", "packaging/Dockerfile")
     return sorted({path for pattern in patterns for path in root.glob(pattern)
                    if path.is_file() and not path.is_symlink()})
 
@@ -57,7 +58,7 @@ def main():
     options.output.mkdir(parents=True, exist_ok=True)
     located_dotnet = shutil.which(options.dotnet)
     if not located_dotnet:
-        parser.error(".NET 8 SDK is required; install dotnet-sdk-8.0 or pass --dotnet EXECUTABLE")
+        parser.error(".NET 10 SDK is required; install dotnet-sdk-10.0 or pass --dotnet EXECUTABLE")
     dotnet = str(Path(located_dotnet).resolve())
     try:
         with tempfile.TemporaryDirectory(prefix="build-", dir=options.output) as temporary:
