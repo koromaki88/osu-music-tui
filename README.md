@@ -27,7 +27,7 @@ After obtaining `osu-player-x86_64.AppImage`, close lazer and run it from a term
 
 ```bash
 chmod +x osu-player-x86_64.AppImage
-./osu-player-x86_64.AppImage tui --osu-dir "$HOME/.local/share/osu"
+./osu-player-x86_64.AppImage tui
 ```
 
 You can move/rename this file or keep it in `~/.local/bin/`. The embedded indexer is
@@ -273,12 +273,15 @@ player stays responsive; it does **not** make copying a live Realm database safe
 
 ```bash
 make indexer
-./bin/osu-player tui --osu-dir "$HOME/.local/share/osu"
+./bin/osu-player tui
 # For slow storage / larger libraries:
 ./bin/osu-player tui --osu-dir /path/to/osu-data --index-timeout 900
 # Bypass all cache reads/writes:
 ./bin/osu-player tui --osu-dir /path/to/osu-data --no-cache
 ```
+
+Without `--osu-dir`, `tui` uses `$HOME/.local/share/osu`. An explicit `--osu-dir`
+overrides this; `tui FILE.ndjson` still opens an exported library instead.
 
 The default adapter command uses the built Release DLL under `tools/osu-indexer/` and
 the local `.tools/dotnet/dotnet` if present, otherwise `dotnet` on PATH. Paths are resolved

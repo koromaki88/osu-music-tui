@@ -23,7 +23,7 @@ import time
 
 root = Path(__file__).parent
 assert sys.argv[1] == "--osu-dir" and len(sys.argv) == 3
-assert Path(sys.argv[2]) in (root / "osu data ; literal", root / "other source")
+assert Path(sys.argv[2]) in (root / "osu data ; literal", root / "other source", root / "home/.local/share/osu")
 config = json.loads((root / "config.json").read_text())
 # Simulate a private Realm snapshot left behind even on forced termination.
 snapshot = Path(tempfile.mkdtemp(prefix="fake-realm-")) / "client.realm"
@@ -228,6 +228,23 @@ def exercise(executable, root):
         session.send("q")
         session.finish()
     check(len(list(cache_home.rglob("*.ndjson"))) == 2, "different source directories need isolated caches")
+
+    # Omitted --osu-dir resolves under a disposable HOME, never the real library.
+    home = root / "home"
+    default_source = home / ".local/share/osu"
+    default_source.mkdir(parents=True)
+    (default_source / "client.realm").write_bytes(original)
+    with Session(executable, arguments=["--indexer", str(adapter), "--no-cache"],
+                 **(environment | {"HOME": str(home)})) as session:
+        session.expect("Library indexed.", "Library: 2")
+        session.send("q")
+        session.finish()
+    check((default_source / "client.realm").read_bytes() == original, "default source was modified")
+    (default_source / "client.realm").unlink()
+    with Session(executable, arguments=[], **(environment | {"HOME": str(home)})) as session:
+        session.expect("Refresh failed:", "cannot stat")
+        session.send("q")
+        session.finish()
 
     # Missing database: use the last known library, but show the refresh error.
     realm.unlink()

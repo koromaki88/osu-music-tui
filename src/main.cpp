@@ -21,7 +21,7 @@ constexpr std::string_view usage =
     "       osu-player play HASH [OSU_DATA_DIRECTORY]\n"
     "       osu-player queue NDJSON_FILE\n"
     "       osu-player tui NDJSON_FILE\n"
-    "       osu-player tui --osu-dir DIRECTORY [--indexer EXECUTABLE] [--no-cache]\n"
+    "       osu-player tui [--osu-dir DIRECTORY] [--indexer EXECUTABLE] [--no-cache]\n"
     "                      [--index-timeout SECONDS]\n"
     "       osu-player library NDJSON_FILE|- [SEARCH]\n"
     "\n"
@@ -126,7 +126,8 @@ int run_tui(const int argc, char* argv[])
             return 2;
         }
     }
-    if (!directory || options.osu_directory.empty()) { std::cerr << usage; return 2; }
+    if (!directory) { options.osu_directory = osu_player::default_osu_data_directory(); }
+    if (options.osu_directory.empty()) { std::cerr << usage; return 2; }
     if (options.adapter_command.empty()) { options.adapter_command = osu_player::default_indexer_command(); }
     return osu_player::run_tui_command(std::move(options));
 }
