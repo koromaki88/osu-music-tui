@@ -13,7 +13,7 @@ namespace {
 
 constexpr std::string_view usage =
     "usage: osu-player probe HASH [OSU_DATA_DIRECTORY]\n"
-    "       osu-player library NDJSON_FILE [SEARCH]\n"
+    "       osu-player library NDJSON_FILE|- [SEARCH]\n"
     "\n"
     "Commands:\n"
     "  probe    Resolve a lazer content hash and inspect its audio stream.\n"
@@ -53,12 +53,17 @@ int run_library(const int argc, char* argv[])
         return 2;
     }
 
-    std::ifstream input{argv[2]};
-    if (!input) {
-        throw std::runtime_error{"could not open library file: " + std::string{argv[2]}};
+    std::ifstream file;
+    std::istream* input = &std::cin;
+    if (std::string_view{argv[2]} != "-") {
+        file.open(argv[2]);
+        if (!file) {
+            throw std::runtime_error{"could not open library file: " + std::string{argv[2]}};
+        }
+        input = &file;
     }
 
-    const osu_player::LibraryLoadResult loaded = osu_player::load_library_ndjson(input);
+    const osu_player::LibraryLoadResult loaded = osu_player::load_library_ndjson(*input);
     const std::string_view query = argc == 4 ? std::string_view{argv[3]} : std::string_view{};
     const std::vector<std::size_t> matches = loaded.library.search(query);
 
