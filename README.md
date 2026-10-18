@@ -138,7 +138,7 @@ public redistribution still needs a license/source-compliance review (especially
 system FFmpeg build) and an application-license decision; see
 [`packaging/THIRD_PARTY.md`](packaging/THIRD_PARTY.md). .NET 10.0.13, SDK 10.0.402, and base/tool digests
 are pinned; update them deliberately for security releases. Optional .NET LTTng tracing
-is omitted. Settings persistence is still a separate, unimplemented QoL feature.
+is omitted. TUI volume, shuffle, repeat, and applied search preferences persist across restarts.
 
 ## Native Arch Linux package
 
@@ -357,6 +357,25 @@ Metadata controls/escape sequences are neutralized and text is clipped by termin
 width; complex emoji grapheme clusters are not fully modeled. Quit, Ctrl-C, SIGTERM, and
 SIGHUP restore terminal settings. Mouse support and indexing while lazer is running are
 not implemented.
+
+### Saved preferences
+
+The TUI automatically saves volume, shuffle, repeat mode, and the last applied search
+filter to `$XDG_CONFIG_HOME/osu-player/settings.json`, or
+`$HOME/.config/osu-player/settings.json` when the XDG path is unset, empty, or relative.
+Preferences are shared across libraries and builds (development, AppImage, native package).
+Playback never starts automatically; the current track, position, and queue are not restored.
+Search edits are saved only when applied with Enter; Esc cancels an edit.
+
+Changes use a private, atomically replaced file, not the osu! directory. Missing settings
+use defaults (70% volume, shuffle/repeat off, empty search). Invalid or unsupported files
+are preserved and defaults are used with an on-screen warning; persistence is disabled
+for that session. Save errors are also shown without interrupting playback. Multiple
+instances use last-writer-wins rather than merging preferences.
+
+To reset preferences, close all player instances and remove the settings file. No library
+cache or osu! content needs to be deleted. Only the TUI saves these preferences; CLI
+playback commands keep their existing behavior.
 
 ### Background indexing and cache
 

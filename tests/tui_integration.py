@@ -146,6 +146,9 @@ class Screen:
 
 class Session:
     def __init__(self, executable, library=None, *, arguments=None, **environment):
+        # Never read/write the developer's actual preferences, including callers
+        # from other PTY integration suites. Explicit config paths test restarts.
+        self.config = tempfile.TemporaryDirectory(prefix="osu-tui-config-")
         self.master, self.slave = pty.openpty()
         self.screen = Screen(24, 100)
         self.original_attributes = termios.tcgetattr(self.slave)
@@ -155,7 +158,7 @@ class Session:
             stdin=self.slave, stdout=self.slave,
             stderr=subprocess.PIPE, start_new_session=True,
             env=dict(os.environ, TERM="xterm-256color", LANG="C.UTF-8", LC_ALL="C.UTF-8",
-                     SDL_AUDIODRIVER="dummy") | environment,
+                      SDL_AUDIODRIVER="dummy", XDG_CONFIG_HOME=self.config.name) | environment,
         )
 
     def drain(self, duration=0.05):
@@ -209,6 +212,7 @@ class Session:
         self.process.stderr.close()
         os.close(self.master)
         os.close(self.slave)
+        self.config.cleanup()
 
 
 def write_library(path, records):
@@ -266,6 +270,89 @@ def exercise_ui(executable, library):
         session.finish()
 
 
+def exercise_settings(executable, library, root):
+    config = root / "config"
+    path = config / "osu-player/settings.json"
+    environment = {"XDG_CONFIG_HOME": str(config)}
+    with Session(executable, library, **environment) as session:
+        session.expect("Library: 3", "Volume: 70%", "Shuffle: off", "Repeat: off")
+        session.send("--sRR/Bêta\n")
+        session.expect("Volume: 60%", "Shuffle: on", "Repeat: all", "Search: Bêta", "Matches: 1")
+        # Save immediately, not just at orderly exit.
+        saved = json.loads(path.read_text())
+        assert abs(saved["volume"] - 0.6) < 0.001 and saved["shuffle"] and saved["repeat"] == "all"
+        assert saved["search"] == "Bêta"
+        assert path.stat().st_mode & 0o777 == 0o600
+        session.send("/uncommitted")
+        session.process.send_signal(signal.SIGTERM)
+        session.finish(128 + signal.SIGTERM)
+    with Session(executable, library, **environment) as session:
+        session.expect("Volume: 60%", "Shuffle: on", "Repeat: all", "Search: Bêta", "Matches: 1",
+                       "State: stopped", "Now: No track selected")
+        session.send("\x1b")
+        session.expect("Matches: 3")
+        session.send("q")
+        session.finish()
+    assert json.loads(path.read_text())["search"] == ""
+    assert list(path.parent.iterdir()) == [path], "staging files leaked"
+
+    # Invalid, oversized, and newer-schema files must not crash or be overwritten.
+    for contents in ('{broken', '{"version":1,"volume":2}', '{"version":1,"volume":NaN}',
+                     '{"version":1,"shuffle":"yes"}',
+                     '{"version":1,"repeat":"bad"}', '{"version":2}', 'x' * 4097,
+                     '{"version":1} trailing'):
+        path.write_text(contents)
+        with Session(executable, library, **environment) as session:
+            session.expect("Library: 3", "Volume: 70%", "Settings:")
+            session.send("+sRq")
+            session.finish()
+        assert path.read_text() == contents
+
+    for volume in (0, 1):
+        path.write_text(json.dumps({"version": 1, "volume": volume}))
+        with Session(executable, library, **environment) as session:
+            session.expect("Library: 3", f"Volume: {volume * 100}%")
+            session.send("q")
+            session.finish()
+
+    path.write_text('{"version":1}')
+    with Session(executable, library, **environment) as session:
+        session.expect("Library: 3")
+        session.send("+s")
+        session.expect("Volume: 75%", "Shuffle: on")
+        session.process.kill()
+        session.process.wait(timeout=5)
+    with Session(executable, library, **environment) as session:
+        session.expect("Library: 3", "Volume: 75%", "Shuffle: on", "State: stopped")
+        session.send("q")
+        session.finish()
+
+    # Missing optional properties use defaults; missing file isn't an error.
+    path.write_text('{"version":1,"shuffle":true}')
+    with Session(executable, library, **environment) as session:
+        session.expect("Library: 3", "Volume: 70%", "Shuffle: on", "Repeat: off")
+        session.send("q")
+        session.finish()
+    path.unlink()
+    # A readable settings file with a blocked staging directory is tested using
+    # /proc: path resolution works, but creating an app config directory cannot.
+    with Session(executable, library, XDG_CONFIG_HOME="/proc") as session:
+        session.expect("Library: 3")
+        session.send("+")
+        session.expect("Volume: 75%", "Settings not saved:")
+        session.send("q")
+        session.finish()
+
+    # Relative XDG paths are ignored per the base-directory specification.
+    home = root / "home"
+    home.mkdir()
+    with Session(executable, library, XDG_CONFIG_HOME="relative", HOME=str(home)) as session:
+        session.expect("Library: 3")
+        session.send("-q")
+        session.finish()
+    assert abs(json.loads((home / ".config/osu-player/settings.json").read_text())["volume"] - 0.65) < 0.001
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--player-binary", default="./bin/osu-player")
@@ -288,6 +375,7 @@ def main():
         library = root / "library.ndjson"
         write_library(library, records)
         exercise_ui(options.player_binary, library)
+        exercise_settings(options.player_binary, library, root)
 
         empty = root / "empty.ndjson"
         write_library(empty, [])
@@ -321,7 +409,7 @@ def main():
                                text=True, capture_output=True, timeout=10)
         if piped.returncode != 1 or "interactive terminal" not in piped.stderr:
             raise RuntimeError("non-TTY input/output must be rejected cleanly")
-    print("TUI PTY tests passed: keys, UTF-8 search, resize, empty library, device error, terminal cleanup")
+    print("TUI PTY tests passed: keys, UTF-8 search, resize, empty library, device error, terminal cleanup, settings persistence")
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 #include "osu_player/library_loader.hpp"
 #include "osu_player/library_view.hpp"
 #include "osu_player/player_controller.hpp"
+#include "osu_player/settings.hpp"
 #include "osu_player/terminal_text.hpp"
 
 #include <curses.h>
@@ -302,6 +303,22 @@ int run_tui_command(RefreshOptions options)
     Terminal terminal;
     SignalGuard signals;
     BackendLogGuard backend_logs;
+    Settings saved_settings;
+    std::optional<std::filesystem::path> config_path;
+    std::string settings_warning;
+    bool settings_writable = true;
+    try {
+        config_path = settings_path();
+        saved_settings = load_settings(*config_path);
+    } catch (const std::exception& error) {
+        settings_warning = "Settings: " + std::string{error.what()};
+        // Preserve malformed/newer files rather than silently replacing them.
+        settings_writable = false;
+    }
+    player.set_volume(saved_settings.volume);
+    player.set_shuffle(saved_settings.shuffle);
+    player.set_repeat(saved_settings.repeat);
+    view.set_query(saved_settings.search);
     const bool export_mode = options.export_file.has_value();
     LibraryRefresh refresh{std::move(options)};
     refresh.start(true);
@@ -335,7 +352,8 @@ int run_tui_command(RefreshOptions options)
         view.set_page_size(static_cast<std::size_t>(std::max(1, rows - 10)));
         const auto now = std::chrono::steady_clock::now();
         if (now >= next_frame) {
-            render(player, view, searching, notice, terminal.colors, refresh.busy());
+            render(player, view, searching, settings_warning.empty() ? notice : settings_warning,
+                   terminal.colors, refresh.busy());
             next_frame = now + std::chrono::milliseconds{100};
         }
         wint_t key{};
@@ -361,6 +379,20 @@ int run_tui_command(RefreshOptions options)
             next_frame = std::chrono::steady_clock::now();
         }
         const auto errors = player.take_errors();
+        const Settings current_settings{player.volume(), player.shuffle(), player.repeat(),
+                                        searching ? saved_query : view.query()};
+        if (settings_writable && current_settings != saved_settings) {
+            try {
+                save_settings(*config_path, current_settings);
+                saved_settings = current_settings;
+                settings_warning.clear();
+            } catch (const std::exception& error) {
+                settings_warning = "Settings not saved: " + std::string{error.what()};
+                // Avoid retrying disk I/O every frame; retry after another change.
+                saved_settings = current_settings;
+            }
+            next_frame = std::chrono::steady_clock::now();
+        }
         if (!errors.tracks.empty()) {
             notice = "Skipped track: " + errors.tracks.back().message;
             if (errors.omitted) {

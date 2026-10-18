@@ -44,6 +44,7 @@ add_library(osu_player_core
     src/library_view.cpp
     src/terminal_text.cpp
     src/library_refresh.cpp
+    src/settings.cpp
 )
 
 target_include_directories(osu_player_core PUBLIC include)

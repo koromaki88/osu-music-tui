@@ -20,7 +20,7 @@ ifeq ($(SANITIZE),1)
     LDFLAGS += -fsanitize=address,undefined
 endif
 
-CORE_OBJECTS := obj/library.o obj/library_loader.o obj/storage_path.o obj/track.o obj/player_controller.o obj/library_view.o obj/terminal_text.o obj/library_refresh.o
+CORE_OBJECTS := obj/library.o obj/library_loader.o obj/storage_path.o obj/track.o obj/player_controller.o obj/library_view.o obj/terminal_text.o obj/library_refresh.o obj/settings.o
 AUDIO_OBJECTS := obj/audio_probe.o obj/audio_player.o
 PLAYER_OBJECTS := obj/main.o obj/play_command.o obj/tui_command.o $(AUDIO_OBJECTS) $(CORE_OBJECTS)
 STORAGE_TEST_OBJECTS := obj/storage_path_test.o $(CORE_OBJECTS)
