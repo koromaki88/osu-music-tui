@@ -4,3 +4,9 @@
 *.o
 *.d
 compile_commands.json
+/.tools/
+/tools/**/bin/
+/tools/**/obj/
+/tests/**/bin/
+/tests/**/obj/
+/artifacts/

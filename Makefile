@@ -1,5 +1,8 @@
 CXX ?= c++
 PKG_CONFIG ?= pkg-config
+DOTNET ?= $(if $(wildcard .tools/dotnet/dotnet),.tools/dotnet/dotnet,dotnet)
+OSU_DIR ?= $(HOME)/.local/share/osu
+export DOTNET_CLI_TELEMETRY_OPTOUT := 1
 
 CPPFLAGS := -Iinclude $(shell $(PKG_CONFIG) --cflags libavformat libavcodec libavutil json-c)
 CXXFLAGS := -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -MMD -MP
@@ -16,7 +19,7 @@ STORAGE_TEST_OBJECTS := obj/storage_path_test.o $(CORE_OBJECTS)
 LIBRARY_TEST_OBJECTS := obj/library_test.o $(CORE_OBJECTS)
 DEPENDENCY_FILES := $(PLAYER_OBJECTS:.o=.d) $(STORAGE_TEST_OBJECTS:.o=.d) $(LIBRARY_TEST_OBJECTS:.o=.d)
 
-.PHONY: all test clean
+.PHONY: all test clean indexer test-indexer test-integration
 
 all: bin/osu-player bin/storage-path-tests bin/library-tests
 
@@ -41,6 +44,18 @@ bin obj:
 test: bin/storage-path-tests bin/library-tests
 	./bin/storage-path-tests
 	./bin/library-tests
+
+indexer:
+	$(DOTNET) restore tools/osu-indexer --locked-mode
+	$(DOTNET) build tools/osu-indexer --configuration Release --no-restore --nologo
+
+test-indexer:
+	$(DOTNET) restore tests/osu-indexer-tests --locked-mode
+	$(DOTNET) run --project tests/osu-indexer-tests --configuration Release --no-restore
+
+# Requires lazer to be closed. Does not launch it or write to its directory.
+test-integration: bin/osu-player indexer
+	python3 tests/indexer_integration.py --dotnet "$(DOTNET)" --osu-dir "$(OSU_DIR)"
 
 clean:
 	rm -rf bin obj

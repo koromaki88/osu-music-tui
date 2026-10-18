@@ -10,7 +10,7 @@ it is not yet a TUI player.
 - [x] Inspect extensionless audio through an RAII-wrapped C API
 - [x] Load a versioned NDJSON library contract
 - [x] Validate, deduplicate, sort, and search tracks
-- [ ] Read `client.realm` through the read-only adapter
+- [x] Read `client.realm` through the read-only adapter
 - [ ] Play audio
 - [ ] Add the ncurses TUI
 
@@ -45,6 +45,48 @@ Validate and display the fixture-driven library model:
 The NDJSON input starts with a schema header, followed by `track` and optional `warning`
 records. Tracks are validated, deduplicated by beatmap set and audio hash, then sorted by
 their display artist and title.
+
+## Read the real lazer library
+
+**Close lazer before indexing.** The adapter takes an offline copy; copying a database
+while the game writes to it is not a supported live snapshot. The game is never launched
+by this project.
+
+The adapter requires .NET 8 and pins Realm .NET 20.1.0 with NuGet lock files. This VM has a
+local SDK in `.tools/dotnet`; Make uses it automatically, otherwise it uses `dotnet` from
+`PATH`. You can override the executable with `make DOTNET=/path/to/dotnet indexer`.
+
+```bash
+make indexer
+make test-indexer
+make test-integration
+# For a relocated library:
+make test-integration OSU_DIR=/path/to/osu-data
+```
+
+`test-indexer` creates synthetic Realm fixtures in a temporary directory. The opt-in
+`test-integration` reads your existing library, feeds the adapter's NDJSON into the C++
+loader, and checks that source file hashes, sizes, timestamps, and directory entries are
+unchanged. It hashes the whole data directory, so it can be slow for large libraries.
+
+To display the real library using this VM's local SDK:
+
+```bash
+set -o pipefail
+.tools/dotnet/dotnet tools/osu-indexer/bin/Release/net8.0/osu-indexer.dll \
+  --osu-dir "$HOME/.local/share/osu" | ./bin/osu-player library -
+```
+
+With a system SDK, replace `.tools/dotnet/dotnet` with `dotnet`. Pass a search argument
+after `-` to filter. Build separately: build logs must not be mixed with NDJSON stdout.
+
+The adapter opens only its private temporary copy with Realm, in dynamic read-only mode.
+It never migrates the database or writes Realm locks/sidecars in the source directory.
+Missing audio and broken filename mappings emit warning records. An incompatible schema
+or fatal error exits nonzero, writes diagnostics to stderr, and emits no partial library.
+The game version is the only setting read from `game.ini`; credentials are not exported.
+Duration is left unknown until the actual audio is probed (beatmap gameplay length is not
+necessarily song duration). Temporary copies are removed after use.
 
 For a sanitizer build:
 
