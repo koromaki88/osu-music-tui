@@ -1,8 +1,8 @@
 # osu!(lazer) TUI Music Player
 
 Early C++20 implementation of the plan in [`PLAN.md`](PLAN.md). The program currently
-contains read-only storage/audio experiments and the fixture-driven library domain layer;
-it is not yet a TUI player.
+contains a read-only Realm indexer, a library domain layer, and streaming audio playback
+with line-based controls. The ncurses TUI is not implemented yet.
 
 ## Current progress
 
@@ -11,10 +11,15 @@ it is not yet a TUI player.
 - [x] Load a versioned NDJSON library contract
 - [x] Validate, deduplicate, sort, and search tracks
 - [x] Read `client.realm` through the read-only adapter
-- [ ] Play audio
+- [x] Play audio (pause/resume, stop, seek, volume, EOF handling)
 - [ ] Add the ncurses TUI
 
 ## Current commands
+
+C++ dependencies: GCC/Clang with C++20, Make (or CMake), `pkg-config`, `json-c`, SDL2,
+and FFmpeg development libraries (`libavformat`, `libavcodec`, `libavutil`,
+`libswresample`; FFmpeg 5+). Tests also require Python 3.11+ and the `ffmpeg` executable
+with MP3 (`libmp3lame`) and Ogg Vorbis (`libvorbis`) encoders.
 
 Build and run tests with the Make fallback available in this VM:
 
@@ -34,6 +39,31 @@ Pass a relocated data directory as the final argument:
 ```bash
 ./bin/osu-player probe HASH /path/to/osu-data
 ```
+
+Play audio directly from the content store:
+
+```bash
+./bin/osu-player play 47b895484e7751f3ab429694ff6dbf21e774ab023e4f6c5b481476f04ff22f0f
+# Optional final argument: /path/to/osu-data
+```
+
+Commands are line-based for now: type a command, then press Enter.
+
+| Command | Action |
+|---|---|
+| `pause` / `p` | Pause |
+| `resume` / `r` | Resume (or restart a finished source) |
+| `stop` | Pause and rewind |
+| `seek 45.5` | Seek to 45.5 seconds |
+| `volume 0.5` | Set volume in the range 0–1 |
+| `status` | Show position, duration, and volume |
+| `quit` / `q` | Exit and release audio resources |
+
+Playback ends automatically at EOF. Decoder/output failures report an error and exit
+nonzero. No audio device is needed for `probe` or `library`. Playback uses FFmpeg to
+decode/resample into a small SDL2 output queue, not a whole-song PCM allocation. Queue
+refill runs on the control thread; it must be pumped regularly. Volume changes affect
+newly queued samples (normally within about 120 ms, plus device latency).
 
 Validate and display the fixture-driven library model:
 
@@ -66,8 +96,26 @@ make test-integration OSU_DIR=/path/to/osu-data
 
 `test-indexer` creates synthetic Realm fixtures in a temporary directory. The opt-in
 `test-integration` reads your existing library, feeds the adapter's NDJSON into the C++
-loader, and checks that source file hashes, sizes, timestamps, and directory entries are
-unchanged. It hashes the whole data directory, so it can be slow for large libraries.
+loader, and by default verifies **Realm/config control files and root directory entries**.
+It does **not** walk or hash the songs tree in quick mode. Exported audio paths are still
+checked for existence, but quick verification is not proof that every audio file stayed
+unchanged.
+
+For large libraries:
+
+```bash
+# Default: quick verification, 300-second timeout per subprocess
+make test-integration
+# Increase timeout for slower disks or especially large databases
+make test-integration INTEGRATION_TIMEOUT=900
+# Optional expensive check: hash every source file twice
+make test-integration INTEGRATION_VERIFY=full INTEGRATION_TIMEOUT=900
+```
+
+The timeout applies to each subprocess, not directory hashing or the entire test. The
+test prints phase progress and at most five song titles. NDJSON is processed one record
+at a time using disk-backed temporary streams rather than multiple in-memory copies.
+Full verification can take a long time because it reads the whole library twice.
 
 To display the real library using this VM's local SDK:
 
@@ -95,6 +143,13 @@ make clean
 make SANITIZE=1
 make SANITIZE=1 test
 ```
+
+`make test` includes synthetic audio transport and CLI tests with SDL's **dummy** output
+device: they do not play audible audio or launch osu!. Tests generate their own short WAV,
+MP3, and Ogg files in temporary directories. They also test quick/full verification and
+incremental validation of a 10,001-record export without real game data.
+
+Run `make clean` before switching between regular and sanitizer Make builds.
 
 The intended CMake build, once CMake and Ninja are installed, is:
 

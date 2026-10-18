@@ -29,8 +29,10 @@ function(osu_player_enable_sanitizers target)
 endfunction()
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil libswresample)
 pkg_check_modules(JSON_C REQUIRED IMPORTED_TARGET json-c)
+pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+find_package(Threads REQUIRED)
 
 add_library(osu_player_core
     src/library.cpp
@@ -44,17 +46,24 @@ target_link_libraries(osu_player_core PRIVATE PkgConfig::JSON_C)
 osu_player_set_warnings(osu_player_core)
 osu_player_enable_sanitizers(osu_player_core)
 
-add_executable(osu-player
-    src/main.cpp
+add_library(osu_player_audio
+    src/audio_player.cpp
     src/audio_probe.cpp
 )
+target_include_directories(osu_player_audio PUBLIC include)
+target_link_libraries(osu_player_audio PRIVATE PkgConfig::FFMPEG PkgConfig::SDL2)
+osu_player_set_warnings(osu_player_audio)
+osu_player_enable_sanitizers(osu_player_audio)
 
-target_link_libraries(osu-player PRIVATE osu_player_core PkgConfig::FFMPEG)
+add_executable(osu-player src/main.cpp src/play_command.cpp)
+
+target_link_libraries(osu-player PRIVATE osu_player_core osu_player_audio)
 osu_player_set_warnings(osu-player)
 osu_player_enable_sanitizers(osu-player)
 
 include(CTest)
 if(BUILD_TESTING)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_executable(storage-path-tests tests/storage_path_test.cpp)
     target_link_libraries(storage-path-tests PRIVATE osu_player_core)
     osu_player_set_warnings(storage-path-tests)
@@ -66,4 +75,15 @@ if(BUILD_TESTING)
     osu_player_set_warnings(library-tests)
     osu_player_enable_sanitizers(library-tests)
     add_test(NAME library COMMAND library-tests)
+
+    add_executable(audio-player-tests tests/audio_player_test.cpp)
+    target_link_libraries(audio-player-tests PRIVATE osu_player_audio Threads::Threads)
+    osu_player_set_warnings(audio-player-tests)
+    osu_player_enable_sanitizers(audio-player-tests)
+    add_test(NAME audio COMMAND Python3::Interpreter
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/audio_integration.py
+        --test-binary $<TARGET_FILE:audio-player-tests>
+        --player-binary $<TARGET_FILE:osu-player>)
+    add_test(NAME indexer-verification COMMAND Python3::Interpreter
+        -m unittest discover -s ${CMAKE_CURRENT_SOURCE_DIR}/tests -p "test_*.py")
 endif()

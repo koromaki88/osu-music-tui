@@ -1,5 +1,6 @@
 #include "osu_player/audio_probe.hpp"
 #include "osu_player/library_loader.hpp"
+#include "osu_player/play_command.hpp"
 #include "osu_player/storage_path.hpp"
 
 #include <filesystem>
@@ -13,10 +14,12 @@ namespace {
 
 constexpr std::string_view usage =
     "usage: osu-player probe HASH [OSU_DATA_DIRECTORY]\n"
+    "       osu-player play HASH [OSU_DATA_DIRECTORY]\n"
     "       osu-player library NDJSON_FILE|- [SEARCH]\n"
     "\n"
     "Commands:\n"
     "  probe    Resolve a lazer content hash and inspect its audio stream.\n"
+    "  play     Play hashed audio with line-based transport controls.\n"
     "  library  Validate and print a normalized NDJSON music library.\n";
 
 int run_probe(const int argc, char* argv[])
@@ -98,6 +101,15 @@ int run(const int argc, char* argv[])
     }
     if (command == "library") {
         return run_library(argc, argv);
+    }
+    if (command == "play") {
+        if (argc != 3 && argc != 4) {
+            std::cerr << usage;
+            return 2;
+        }
+        const std::filesystem::path directory = argc == 4
+            ? std::filesystem::path{argv[3]} : osu_player::default_osu_data_directory();
+        return osu_player::run_play_command(osu_player::content_path(directory, argv[2]));
     }
 
     std::cerr << "error: unknown command '" << command << "'\n\n" << usage;

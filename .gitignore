@@ -10,3 +10,4 @@ compile_commands.json
 /tests/**/bin/
 /tests/**/obj/
 /artifacts/
+__pycache__/
