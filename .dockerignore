@@ -1,6 +1,8 @@
 **
 !Makefile
 !README.md
+!DEVELOPMENT.md
+!CHANGELOG.md
 !include/
 include/**
 !include/osu_player/

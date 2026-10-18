@@ -22,7 +22,7 @@ SMOKE_IMAGE = "debian:bookworm-slim@sha256:a4672c0cb26fbdde88e38fa2dfb6c68194230
 def source_snapshot(root, destination):
     # Explicit allowlist, independent of Docker ignore semantics. Never mount the
     # working tree itself: it may contain SDKs, artifacts, or the game executable.
-    patterns = ("Makefile", "README.md", "src/*.cpp", "include/osu_player/*.hpp",
+    patterns = ("Makefile", "README.md", "DEVELOPMENT.md", "CHANGELOG.md", "src/*.cpp", "include/osu_player/*.hpp",
                 "tests/*.py", "tests/*.cpp", "tests/*.hpp", "tests/fixtures/*.ndjson",
                 "tests/osu-indexer-tests/*.cs", "tests/osu-indexer-tests/*.csproj",
                 "tests/osu-indexer-tests/packages.lock.json", "tools/package_appimage.py",

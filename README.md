@@ -66,7 +66,7 @@ is needed to run it.
 Install the generated local package, then close lazer and start the player:
 
 ```bash
-sudo pacman -U artifacts/arch/osu-music-player-0.1.0-2-x86_64.pkg.tar.zst
+sudo pacman -U artifacts/arch/osu-music-player-0.2.0-1-x86_64.pkg.tar.zst
 osu-player tui
 ```
 

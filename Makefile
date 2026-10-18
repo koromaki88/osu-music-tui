@@ -8,6 +8,7 @@ TEST_LOG_DIR ?= artifacts
 RELEASE_DIR ?= artifacts/release
 RELEASE_CXXFLAGS ?= -O2 -DNDEBUG
 CONTAINER_ENGINE ?= docker
+ARCH_PACKAGE_FLAGS ?=
 export DOTNET_CLI_TELEMETRY_OPTOUT := 1
 
 PACKAGES := libavformat libavcodec libavutil libswresample json-c sdl2 ncursesw
@@ -53,7 +54,7 @@ appimage-local: release
 
 arch-package:
 	@mkdir -p "$(TEST_LOG_DIR)"
-	@bash -o pipefail -c 'python3 tools/build_arch_package.py --dotnet "$(DOTNET)" 2>&1 | tee "$$1"' _ "$(TEST_LOG_DIR)/arch-package.log"
+	@bash -o pipefail -c 'python3 tools/build_arch_package.py --dotnet "$(DOTNET)" $(ARCH_PACKAGE_FLAGS) 2>&1 | tee "$$1"' _ "$(TEST_LOG_DIR)/arch-package.log"
 
 bin/osu-player: $(PLAYER_OBJECTS) | bin
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@

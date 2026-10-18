@@ -271,6 +271,8 @@ def exercise_ui(executable, library):
 
 
 def exercise_settings(executable, library, root):
+    root = root / "settings-tests"
+    root.mkdir()
     config = root / "config"
     path = config / "osu-player/settings.json"
     environment = {"XDG_CONFIG_HOME": str(config)}

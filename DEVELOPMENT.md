@@ -233,6 +233,12 @@ discovery, default osu directory, and generated-audio playback/terminal controls
 neither installs the package nor accesses the real library. Explicit FFmpeg SONAME
 dependencies guard against incompatible major versions; rebuild after ABI upgrades.
 
+For controlled developer validation with a private .NET SDK instead of pacman-installed
+.NET packages, `ARCH_PACKAGE_FLAGS=--nodeps` skips makepkg dependency checks. This is not
+the normal release-environment setup: verify native dependencies separately and set
+`DOTNET_ROOT` to the private runtime for extracted-indexer tests. It does not validate
+pacman installation or dependency resolution and never changes installed host packages.
+
 ## Implementation notes
 
 - C++20 code wraps json-c and other C APIs with RAII. `PlayerController` owns its library

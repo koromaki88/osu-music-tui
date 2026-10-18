@@ -12,11 +12,11 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
-NAME = "osu-music-player-0.1.0"
+NAME = "osu-music-player-0.2.0"
 
 
 def source_files(root):
-    patterns = ("Makefile", "README.md", "src/*.cpp", "include/osu_player/*.hpp",
+    patterns = ("Makefile", "README.md", "DEVELOPMENT.md", "CHANGELOG.md", "src/*.cpp", "include/osu_player/*.hpp",
                 "tests/*.cpp", "tests/*.hpp", "tests/*.py", "tests/fixtures/*.ndjson",
                 "tests/osu-indexer-tests/*.cs", "tests/osu-indexer-tests/*.csproj",
                 "tests/osu-indexer-tests/packages.lock.json",
