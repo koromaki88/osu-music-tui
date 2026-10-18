@@ -4,6 +4,7 @@ DOTNET ?= $(if $(wildcard .tools/dotnet/dotnet),.tools/dotnet/dotnet,dotnet)
 OSU_DIR ?= $(HOME)/.local/share/osu
 INTEGRATION_TIMEOUT ?= 300
 INTEGRATION_VERIFY ?= quick
+TEST_LOG_DIR ?= artifacts
 export DOTNET_CLI_TELEMETRY_OPTOUT := 1
 
 PACKAGES := libavformat libavcodec libavutil libswresample json-c sdl2 ncursesw
@@ -26,7 +27,7 @@ CONTROLLER_TEST_OBJECTS := obj/player_controller_test.o $(CORE_OBJECTS)
 TUI_TEST_OBJECTS := obj/tui_model_test.o $(CORE_OBJECTS)
 DEPENDENCY_FILES := $(PLAYER_OBJECTS:.o=.d) $(STORAGE_TEST_OBJECTS:.o=.d) $(LIBRARY_TEST_OBJECTS:.o=.d) $(AUDIO_TEST_OBJECTS:.o=.d) $(CONTROLLER_TEST_OBJECTS:.o=.d) $(TUI_TEST_OBJECTS:.o=.d)
 
-.PHONY: all test clean indexer test-indexer test-integration
+.PHONY: all test clean indexer test-indexer test-integration _test _test-indexer _test-integration
 
 all: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-tests bin/player-controller-tests bin/tui-model-tests
 
@@ -57,7 +58,13 @@ obj/%_test.o: tests/%_test.cpp | obj
 bin obj:
 	mkdir -p $@
 
-test: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-tests bin/player-controller-tests bin/tui-model-tests
+# Wrap the entire inner build/run so compiler errors are logged too. pipefail
+# preserves test/build failures (and tee errors) instead of returning tee's success.
+test test-indexer test-integration:
+	@mkdir -p "$(TEST_LOG_DIR)"
+	+@bash -o pipefail -c '$(MAKE) --no-print-directory _$@ 2>&1 | tee "$$1"' _ "$(TEST_LOG_DIR)/$(if $(filter test,$@),tests,$@).log"
+
+_test: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-tests bin/player-controller-tests bin/tui-model-tests
 	./bin/storage-path-tests
 	./bin/library-tests
 	./bin/player-controller-tests
@@ -71,12 +78,12 @@ indexer:
 	$(DOTNET) restore tools/osu-indexer --locked-mode
 	$(DOTNET) build tools/osu-indexer --configuration Release --no-restore --nologo
 
-test-indexer:
+_test-indexer:
 	$(DOTNET) restore tests/osu-indexer-tests --locked-mode
 	$(DOTNET) run --project tests/osu-indexer-tests --configuration Release --no-restore
 
 # Requires lazer to be closed. Does not launch it or write to its directory.
-test-integration: bin/osu-player indexer
+_test-integration: bin/osu-player indexer
 	python3 tests/indexer_integration.py --dotnet "$(DOTNET)" --osu-dir "$(OSU_DIR)" --timeout "$(INTEGRATION_TIMEOUT)" --verify "$(INTEGRATION_VERIFY)"
 
 clean:

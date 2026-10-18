@@ -30,6 +30,17 @@ make
 make test
 ```
 
+Test commands automatically display output and save both stdout and stderr (including
+build failures) to logs, replacing the previous log for that command:
+
+- `make test` → `artifacts/tests.log`
+- `make test-indexer` → `artifacts/test-indexer.log`
+- `make test-integration` → `artifacts/test-integration.log`
+
+Failures still return a nonzero exit status. Override the directory with
+`make test TEST_LOG_DIR=/path/to/logs`. Logs are local; `artifacts/` is gitignored.
+Automatic logging uses Bash and `tee`.
+
 Inspect an extensionless lazer audio file by its SHA-256 hash:
 
 ```bash
