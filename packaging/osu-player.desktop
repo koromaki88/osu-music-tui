@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=osu! Music Player
+Comment=Unofficial terminal music player for an existing osu!(lazer) library
+Exec=osu-player
+Icon=osu-player
+Terminal=true
+Categories=AudioVideo;Audio;Player;

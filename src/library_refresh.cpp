@@ -323,9 +323,14 @@ void write_cache(const Path& target, const Path& raw, const Path& source, const 
 
 std::vector<std::string> default_indexer_command()
 {
+    const auto executable_directory = std::filesystem::canonical("/proc/self/exe").parent_path();
+    const auto packaged = executable_directory / "../lib/osu-player/indexer/osu-indexer";
+    if (std::filesystem::is_regular_file(packaged) && ::access(packaged.c_str(), X_OK) == 0) {
+        return {packaged.lexically_normal().string()};
+    }
     // Development layout, independent of the caller's working directory. An
     // installed adapter can instead be supplied as an executable via --indexer.
-    const auto root = std::filesystem::canonical("/proc/self/exe").parent_path().parent_path();
+    const auto root = executable_directory.parent_path();
     const auto local_dotnet = root / ".tools/dotnet/dotnet";
     return {std::filesystem::exists(local_dotnet) ? local_dotnet.string() : "dotnet",
             (root / "tools/osu-indexer/bin/Release/net8.0/osu-indexer.dll").string()};

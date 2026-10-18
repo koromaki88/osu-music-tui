@@ -15,6 +15,95 @@ with both line-based controls and an ncurses TUI.
 - [x] Playback controller (queue, next/previous, shuffle, repeat, failed-track recovery)
 - [x] Ncurses TUI (search, selection, progress, transport controls, resize handling)
 - [x] Background indexing/refresh and XDG cache (offline Realm snapshots only)
+- [x] Single-file Linux x86-64 AppImage with bundled indexer/.NET runtime
+
+## Standalone application
+
+The distributable is **one executable file**, including the C++ player, self-contained
+.NET 8 indexer, Realm, FFmpeg, SDL, ncurses, json-c, and native application dependencies.
+End users do not need the source directory, a compiler, an SDK, or a separate .NET install.
+
+After obtaining `osu-player-x86_64.AppImage`, close lazer and run it from a terminal:
+
+```bash
+chmod +x osu-player-x86_64.AppImage
+./osu-player-x86_64.AppImage tui --osu-dir "$HOME/.local/share/osu"
+```
+
+You can move/rename this file or keep it in `~/.local/bin/`. The embedded indexer is
+resolved relative to the executable **inside** the image; it never relies on the build
+machine's `.tools/dotnet` or your current directory. Cache files remain in the normal XDG
+location. `--indexer` still explicitly overrides the bundled adapter if requested.
+
+The default release build uses a Debian 12 baseline: **Linux x86-64 with glibc 2.36 or
+newer**, `/bin/sh`, a UTF-8 locale, and working host audio services/drivers are required.
+This is not an Alpine/musl build or a Windows/macOS executable. glibc and the dynamic
+loader are deliberately not bundled. Consult the generated manifest for the measured
+minimum glibc version of a particular build; older distributions are not supported yet.
+
+Normal mounted execution needs a working FUSE setup and a suitable `fusermount` helper.
+If those are unavailable (for example, in some containers), no installation is necessary;
+use the built-in fallback:
+
+```bash
+./osu-player-x86_64.AppImage --appimage-extract-and-run tui --osu-dir /path/to/osu-data
+```
+
+That fallback decompresses to temporary storage each launch, so startup is slower than
+normal mounted execution. For repeated use without FUSE, extract once and run the folder:
+
+```bash
+./osu-player-x86_64.AppImage --appimage-extract
+./squashfs-root/AppRun tui --osu-dir /path/to/osu-data
+```
+
+### Build the standalone file
+
+On a development machine with Make, Python 3.11+, and a running Docker engine:
+
+```bash
+make appimage
+# Or use Podman:
+make appimage CONTAINER_ENGINE=podman
+```
+
+No native compiler/.NET installation is needed on the host for this container build.
+The first build downloads the pinned .NET SDK base image, distro build dependencies,
+NuGet dependencies, and checksum-verified appimagetool 1.9.1. Later builds reuse container
+layers. The builder never launches osu! or reads your real library. Build context is
+allowlisted by `.dockerignore`, excluding caches, `.tools/`, the game AppImage, and local
+artifacts. The final artifact is smoke-tested in a separate minimal Debian container
+with **no installed .NET or application libraries**, using a synthetic Realm fixture.
+
+Outputs:
+
+- `artifacts/dist/osu-player-x86_64.AppImage`
+- `artifacts/dist/osu-player-x86_64.AppImage.sha256`
+- `artifacts/dist/osu-player-x86_64.AppImage.manifest.json`
+
+Only the AppImage is required to run. The checksum and manifest are useful for verifying
+downloads and auditing the included dependencies. Verify with `sha256sum -c` from its
+directory. A checksum detects corruption; it is not a publisher signature.
+
+`make appimage-local` builds against the current host instead (requires normal development
+dependencies and .NET). That can produce a much newer glibc requirement, so it is **not**
+the recommended portable release path. `make release` builds only an optimized C++
+executable in `artifacts/release/`, separate from regular/sanitizer objects; that executable
+alone still needs native libraries and an external indexer.
+
+`make test-appimage` builds the image, runs the synthetic indexer tests, and verifies
+relocation, actual packaged indexing with no `dotnet` on PATH, and generated-audio PTY
+playback inside the container build (cached successful layers may be reused). No host
+.NET installation is required. Its output is saved to `artifacts/test-appimage.log`. The default `make test`
+includes lightweight packaging safety tests but does not download/build an AppImage.
+
+**Release caveats:** the current package is a local unsigned build, not a published
+download. Dependency notices/available license texts and a manifest are embedded, but
+public redistribution still needs a license/source-compliance review (especially the
+system FFmpeg build) and an application-license decision; see
+[`packaging/THIRD_PARTY.md`](packaging/THIRD_PARTY.md). .NET 8.0.32 and base/tool digests
+are pinned; update them deliberately for security releases. Optional .NET LTTng tracing
+is omitted. Settings persistence is still a separate, unimplemented QoL feature.
 
 ## Current commands
 
@@ -36,6 +125,7 @@ build failures) to logs, replacing the previous log for that command:
 - `make test` → `artifacts/tests.log`
 - `make test-indexer` → `artifacts/test-indexer.log`
 - `make test-integration` → `artifacts/test-integration.log`
+- `make test-appimage` → `artifacts/test-appimage.log`
 
 Failures still return a nonzero exit status. Override the directory with
 `make test TEST_LOG_DIR=/path/to/logs`. Logs are local; `artifacts/` is gitignored.

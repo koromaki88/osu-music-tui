@@ -4,11 +4,37 @@ using OsuIndexer;
 using Realms;
 using Realms.Schema;
 
+if (args.Length != 0 && (args.Length != 2 || args[0] != "--fixture-output"))
+{
+    Console.Error.WriteLine("usage: osu-indexer-tests [--fixture-output NEW_DIRECTORY]");
+    return 2;
+}
+
 string root = Path.Combine(Path.GetTempPath(), "osu-indexer-test-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 try
 {
     RunTests(root);
+    if (args.Length == 2)
+    {
+        string destination = Path.GetFullPath(args[1]);
+        if (Directory.Exists(destination) || File.Exists(destination))
+        {
+            throw new IOException("Fixture output must be a new directory.");
+        }
+        Directory.CreateDirectory(destination);
+        foreach (string name in new[] { "client.realm", "game.ini" })
+        {
+            File.Copy(Path.Combine(root, name), Path.Combine(destination, name));
+        }
+        foreach (string source in Directory.GetFiles(Path.Combine(root, "files"), "*", SearchOption.AllDirectories))
+        {
+            string target = Path.Combine(destination, Path.GetRelativePath(root, source));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target);
+        }
+        Console.WriteLine("Synthetic fixture exported.");
+    }
     Console.WriteLine("all indexer tests passed");
     return 0;
 }

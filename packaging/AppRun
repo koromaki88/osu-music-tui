@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+# Do not chdir: exported library paths are relative to the user's shell, not the
+# mounted image. Resolve our own location rather than trusting inherited APPDIR.
+APPDIR=$(CDPATH= cd -- "${0%/*}" && pwd -P)
+export APPDIR
+export LD_LIBRARY_PATH="$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export TERMINFO_DIRS="$APPDIR/usr/share/terminfo:${TERMINFO_DIRS:-}"
+
+exec "$APPDIR/usr/bin/osu-player" "$@"
