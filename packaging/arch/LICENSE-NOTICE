@@ -1,0 +1,13 @@
+No license has yet been selected for the osu-music-player application.
+This notice does not grant redistribution rights or license the application
+under the licenses of its dependencies. This package is for local use pending
+an application-license decision and a redistribution compliance review.
+
+The indexer includes Realm .NET 20.1.0 and its managed/native dependencies.
+See the shipped NuGet lockfile for pinned versions and upstream license details:
+https://github.com/realm/realm-dotnet
+https://github.com/realm/realm-core
+
+The .NET runtime, FFmpeg, SDL, json-c, and ncurses are supplied separately by
+pacman and retain their respective licenses. Before publishing this package,
+review all bundled dependency notices and required corresponding-source duties.

@@ -105,6 +105,63 @@ system FFmpeg build) and an application-license decision; see
 are pinned; update them deliberately for security releases. Optional .NET LTTng tracing
 is omitted. Settings persistence is still a separate, unimplemented QoL feature.
 
+## Native Arch Linux package
+
+Arch x86-64 users can choose a normal **pacman package** instead of the AppImage.
+The current build is approximately **4.4 MiB** (12 MiB installed), excluding system
+dependencies. It installs `osu-player` in `/usr/bin` and the adapter in
+`/usr/lib/osu-player/indexer`. No FUSE, Docker, wrapper, or development directory
+is needed to run it.
+
+Install the generated local package, then close lazer and start the player:
+
+```bash
+sudo pacman -U artifacts/arch/osu-music-player-0.1.0-1-x86_64.pkg.tar.zst
+osu-player tui
+```
+
+Pacman resolves missing runtime dependencies from your configured repositories:
+FFmpeg, SDL2 (provided by `sdl2-compat` on current Arch), ncurses, json-c, and
+`dotnet-runtime-8.0`, plus their dependencies. Unlike the AppImage, this package
+**does require the system .NET 8 runtime**, but no SDK is needed by end users.
+It does not bundle copies of system libraries. Explicit FFmpeg SONAME dependencies
+prevent silently using an incompatible FFmpeg major version.
+
+This is a native **rolling-release Arch** build, not a portable Linux binary.
+Use a fully updated system; rebuild after incompatible library/ABI upgrades.
+The package is local and unsigned, and is not published to the AUR or an Arch repository.
+The same application-license/redistribution review noted above remains necessary before
+public distribution. To uninstall: `sudo pacman -R osu-music-player`.
+
+### Build on Arch
+
+Install development dependencies explicitly (the builder never runs sudo or changes
+your installed packages):
+
+```bash
+sudo pacman -Syu --needed base-devel python dotnet-sdk-8.0 ffmpeg json-c sdl2-compat ncurses
+make arch-package
+```
+
+Run the build as your normal user, not root. `makepkg` checks package dependencies,
+builds an optimized player and framework-dependent linux-x64 indexer, runs the ordinary
+and synthetic adapter tests, and creates the package. NuGet restore needs network access
+on the first build and uses a separate committed `packages.arch.lock.json`.
+
+Outputs are under `artifacts/arch/`: the `.pkg.tar.zst`, its SHA-256 file, and a
+source snapshot plus checksum-filled `PKGBUILD`. The snapshot uses an explicit file
+allowlist; it includes working-tree sources, not just committed changes, but excludes
+the game, real library, SDK, caches, and compiled outputs. The tracked
+`packaging/arch/PKGBUILD` is a template; use `make arch-package` to prepare its source
+archive and checksum rather than running that template directly.
+
+`make test-arch-package` also extracts the package into a temporary directory and checks
+its metadata, packaged indexer discovery, default osu directory, and generated-audio
+playback/terminal controls. It does **not** install the package or access your real library.
+Build/test output is displayed and saved to `artifacts/arch-package.log` and
+`artifacts/test-arch-package.log`, with failures preserved. Docker is not used for either
+Arch target. The AppImage workflow remains available unchanged.
+
 ## Current commands
 
 C++ dependencies: GCC/Clang with C++20, Make (or CMake), `pkg-config`, `json-c`, SDL2, `ncursesw`,
