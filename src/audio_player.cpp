@@ -239,7 +239,7 @@ public:
     OutputDevice()
     {
         if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) {
-            throw std::runtime_error{"initialize audio output: " + std::string{SDL_GetError()}};
+            throw AudioOutputError{"initialize audio output: " + std::string{SDL_GetError()}};
         }
         SDL_AudioSpec desired{};
         desired.freq = output_rate;
@@ -251,7 +251,7 @@ public:
         if (id == 0) {
             const std::string error = SDL_GetError();
             SDL_QuitSubSystem(SDL_INIT_AUDIO);
-            throw std::runtime_error{"open audio output device: " + error};
+            throw AudioOutputError{"open audio output device: " + error};
         }
     }
     ~OutputDevice()
@@ -355,7 +355,7 @@ public:
                 }
                 const auto bytes = static_cast<Uint32>(samples_.size() * sizeof(float));
                 if (SDL_QueueAudio(device_->id, samples_.data(), bytes) != 0) {
-                    throw std::runtime_error{"queue audio output: " + std::string{SDL_GetError()}};
+                    throw AudioOutputError{"queue audio output: " + std::string{SDL_GetError()}};
                 }
                 submitted_frames_ += samples_.size() / output_channels;
             }

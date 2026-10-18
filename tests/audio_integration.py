@@ -3,6 +3,7 @@
 import argparse
 import array
 import hashlib
+import json
 import math
 import os
 from pathlib import Path
@@ -69,7 +70,46 @@ def main():
                                   text=True, capture_output=True, timeout=15)
         if rejected.returncode != 1 or "open audio" not in rejected.stderr:
             raise RuntimeError("corrupt audio must be rejected cleanly")
+
+        def track_record(identifier, title, path):
+            return {"type": "track", "stable_id": identifier, "beatmap_set_id": identifier,
+                    "title": title, "artist": "Test Artist", "audio_filename": "audio.mp3",
+                    "audio_hash": content_hash, "audio_path": str(path)}
+
+        library = root / "library.ndjson"
+        records = [{"type": "header", "schema_version": 1},
+                   track_record("broken", "0 Broken", corrupt),
+                   track_record("first", "A First", stored),
+                   track_record("second", "B Second", stored)]
+        library.write_text("\n".join(json.dumps(record) for record in records) + "\n", encoding="utf-8")
+        queued = subprocess.run(
+            [options.player_binary, "queue", str(library)],
+            input="list First\nnext\nprevious\nshuffle on\nrepeat all\ntrack 3\nquit\n",
+            env=environment, text=True, capture_output=True, check=True, timeout=15,
+        )
+        if ("track error [broken]" not in queued.stderr
+                or "A First" not in queued.stdout or "B Second" not in queued.stdout
+                or "shuffle: on" not in queued.stdout or "repeat: all" not in queued.stdout):
+            raise RuntimeError("queue CLI did not skip the bad track or apply queue controls")
+
+        completed = subprocess.run(
+            [options.player_binary, "queue", str(library)], input="seek 1.8\n",
+            env=environment, text=True, capture_output=True, check=True, timeout=15,
+        )
+        if "B Second" not in completed.stdout or "Playback finished." not in completed.stdout:
+            raise RuntimeError("queue must automatically advance at EOF then stop at its end")
+
+        # A systemic failure must not be reported once per track.
+        no_device = subprocess.run(
+            [options.player_binary, "queue", str(library)], input="quit\n",
+            env=dict(environment, SDL_AUDIODRIVER="osu-player-nonexistent-driver"),
+            text=True, capture_output=True, timeout=15,
+        )
+        if no_device.returncode != 1 or "audio output" not in no_device.stderr:
+            raise RuntimeError("queue must abort on output device failure")
+
         print("audio CLI and error-path tests passed (dummy output; no audible playback)")
+        print("queue CLI, failed-track skipping, and automatic EOF advancement passed")
 
 
 if __name__ == "__main__":

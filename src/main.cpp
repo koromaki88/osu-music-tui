@@ -15,11 +15,13 @@ namespace {
 constexpr std::string_view usage =
     "usage: osu-player probe HASH [OSU_DATA_DIRECTORY]\n"
     "       osu-player play HASH [OSU_DATA_DIRECTORY]\n"
+    "       osu-player queue NDJSON_FILE\n"
     "       osu-player library NDJSON_FILE|- [SEARCH]\n"
     "\n"
     "Commands:\n"
     "  probe    Resolve a lazer content hash and inspect its audio stream.\n"
     "  play     Play hashed audio with line-based transport controls.\n"
+    "  queue    Play an indexed library with queue, shuffle, and repeat controls.\n"
     "  library  Validate and print a normalized NDJSON music library.\n";
 
 int run_probe(const int argc, char* argv[])
@@ -110,6 +112,13 @@ int run(const int argc, char* argv[])
         const std::filesystem::path directory = argc == 4
             ? std::filesystem::path{argv[3]} : osu_player::default_osu_data_directory();
         return osu_player::run_play_command(osu_player::content_path(directory, argv[2]));
+    }
+    if (command == "queue") {
+        if (argc != 3 || std::string_view{argv[2]} == "-") {
+            std::cerr << "queue requires a library file; stdin is reserved for transport commands\n" << usage;
+            return 2;
+        }
+        return osu_player::run_queue_command(argv[2]);
     }
 
     std::cerr << "error: unknown command '" << command << "'\n\n" << usage;

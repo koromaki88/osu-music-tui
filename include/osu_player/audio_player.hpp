@@ -4,10 +4,18 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 
 namespace osu_player {
 
 enum class PlaybackState { empty, ready, playing, paused, finished };
+
+// An output problem affects every track: callers must not treat it as a bad file
+// and scan/retry an entire library. Other runtime errors describe track failures.
+class AudioOutputError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
 
 // Control-thread interface: call update() regularly (roughly every 10 ms) while
 // playing. The backend owns its decoder/device; no UI or Realm types cross here.

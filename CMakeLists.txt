@@ -39,6 +39,7 @@ add_library(osu_player_core
     src/library_loader.cpp
     src/storage_path.cpp
     src/track.cpp
+    src/player_controller.cpp
 )
 
 target_include_directories(osu_player_core PUBLIC include)
@@ -75,6 +76,12 @@ if(BUILD_TESTING)
     osu_player_set_warnings(library-tests)
     osu_player_enable_sanitizers(library-tests)
     add_test(NAME library COMMAND library-tests)
+
+    add_executable(player-controller-tests tests/player_controller_test.cpp)
+    target_link_libraries(player-controller-tests PRIVATE osu_player_core)
+    osu_player_set_warnings(player-controller-tests)
+    osu_player_enable_sanitizers(player-controller-tests)
+    add_test(NAME player-controller COMMAND player-controller-tests)
 
     add_executable(audio-player-tests tests/audio_player_test.cpp)
     target_link_libraries(audio-player-tests PRIVATE osu_player_audio Threads::Threads)

@@ -12,6 +12,7 @@ with line-based controls. The ncurses TUI is not implemented yet.
 - [x] Validate, deduplicate, sort, and search tracks
 - [x] Read `client.realm` through the read-only adapter
 - [x] Play audio (pause/resume, stop, seek, volume, EOF handling)
+- [x] Playback controller (queue, next/previous, shuffle, repeat, failed-track recovery)
 - [ ] Add the ncurses TUI
 
 ## Current commands
@@ -52,7 +53,7 @@ Commands are line-based for now: type a command, then press Enter.
 | Command | Action |
 |---|---|
 | `pause` / `p` | Pause |
-| `resume` / `r` | Resume (or restart a finished source) |
+| `resume` / `r` | Resume (or restart a stopped selection) |
 | `stop` | Pause and rewind |
 | `seek 45.5` | Seek to 45.5 seconds |
 | `volume 0.5` | Set volume in the range 0–1 |
@@ -64,6 +65,60 @@ nonzero. No audio device is needed for `probe` or `library`. Playback uses FFmpe
 decode/resample into a small SDL2 output queue, not a whole-song PCM allocation. Queue
 refill runs on the control thread; it must be pumped regularly. Volume changes affect
 newly queued samples (normally within about 120 ms, plus device latency).
+
+## Play a library queue
+
+Use an NDJSON export from the indexer, rather than entering individual audio hashes:
+
+```bash
+./bin/osu-player queue artifacts/library.ndjson
+```
+
+To create that export on this VM (close lazer first):
+
+```bash
+make indexer
+mkdir -p artifacts
+.tools/dotnet/dotnet tools/osu-indexer/bin/Release/net8.0/osu-indexer.dll \
+  --osu-dir "$HOME/.local/share/osu" > artifacts/library.ndjson.tmp &&
+  mv artifacts/library.ndjson.tmp artifacts/library.ndjson
+```
+
+Use `dotnet` instead of `.tools/dotnet/dotnet` with a system SDK. The temporary-file/rename
+pattern keeps a failed indexing attempt from replacing a usable export. These are local
+metadata files; `artifacts/` is gitignored. `queue` accepts a file, not `-`: stdin is reserved
+for interactive controls.
+
+The existing transport commands also support:
+
+| Command | Action |
+|---|---|
+| `next` / `n` | Start the next queue entry |
+| `previous` / `prev` | Start the previous entry (restart at the head) |
+| `list [SEARCH]` | Print up to 20 matching tracks with their library indices |
+| `track 7` | Play library entry 7 (1-based; indices do not change with shuffle) |
+| `shuffle on` / `shuffle off` | Change queue ordering without interrupting the current song |
+| `repeat off` / `repeat one` / `repeat all` | Stop at end, repeat current on EOF, or cycle the queue |
+
+Queue behavior:
+
+- EOF advances automatically. The CLI exits when the queue ends with repeat off.
+- Repeat-one applies only to automatic EOF, not manual next/previous.
+- Manual navigation starts playback, even from a paused/stopped selection.
+- Enabling shuffle preserves played history/current song and randomizes the remaining
+  suffix. Disabling it restores sorted library order. Repeat-all reshuffles at a forward
+  cycle boundary and avoids an immediate duplicate when there are multiple entries.
+- Track failures are reported and skipped in the navigation direction. Failed entries
+  are not retried automatically during the session, including across repeat-all cycles.
+  Explicit selection retries that entry; restarting a failed/completed queue clears the
+  failure history. An all-broken queue terminates instead of looping.
+- Output-device failures stop immediately rather than attempting the same device for
+  every song. Pending per-track diagnostics are bounded to the last 32, with an omitted
+  count for larger batches.
+
+`PlayerController` in `include/osu_player/player_controller.hpp` owns its library and an
+injected `AudioPlayer`. Its queue contains library indices; it has no terminal or decoder
+implementation dependencies. Call `update()` regularly on the same control thread.
 
 Validate and display the fixture-driven library model:
 
@@ -148,6 +203,12 @@ make SANITIZE=1 test
 device: they do not play audible audio or launch osu!. Tests generate their own short WAV,
 MP3, and Ogg files in temporary directories. They also test quick/full verification and
 incremental validation of a 10,001-record export without real game data.
+
+Controller tests use `tests/fake_audio_player.hpp`: no audio hardware, FFmpeg, Realm,
+terminal, or real files are needed to test queue logic. They include a 10,001-entry
+all-broken queue, deterministic seeded shuffle, repeat modes, load/play/decode failures,
+paused seek recovery, and fatal device failures. Dummy-device CLI tests separately
+verify the real controller/backend integration and automatic EOF advancement.
 
 Run `make clean` before switching between regular and sanitizer Make builds.
 
