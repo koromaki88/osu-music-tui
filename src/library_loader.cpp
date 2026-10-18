@@ -194,7 +194,7 @@ void require_nonempty(
 
 }  // namespace
 
-LibraryLoadResult load_library_ndjson(std::istream& input)
+LibraryLoadResult load_library_ndjson(std::istream& input, const std::stop_token stop)
 {
     LibraryLoadResult result;
     std::vector<Track> tracks;
@@ -203,6 +203,7 @@ LibraryLoadResult load_library_ndjson(std::istream& input)
     bool header_seen = false;
 
     while (std::getline(input, line)) {
+        if (stop.stop_requested()) { throw LibraryFormatError{"library loading cancelled"}; }
         ++line_number;
         if (is_blank(line)) {
             continue;
@@ -251,6 +252,7 @@ LibraryLoadResult load_library_ndjson(std::istream& input)
         throw LibraryFormatError{"library contains no header record"};
     }
 
+    if (stop.stop_requested()) { throw LibraryFormatError{"library loading cancelled"}; }
     result.library = Library{std::move(tracks)};
     return result;
 }

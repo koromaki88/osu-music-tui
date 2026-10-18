@@ -114,6 +114,25 @@ void test_terminal_text()
     check(osu_player::codepoint_utf8(0x110000) == "\xEF\xBF\xBD", "invalid input codepoints become replacement characters");
 }
 
+void test_refreshed_view()
+{
+    auto library = make_library(100);
+    osu_player::LibraryView view{library};
+    view.set_query("song");
+    view.end();
+    const auto id = library.tracks()[*view.selected_index()].stable_id;
+    auto tracks = library.tracks();
+    tracks[*view.selected_index()].title = "Song AAA";
+    library = osu_player::Library{std::move(tracks)};
+    view.refresh(id);
+    check(view.query() == "song" && library.tracks()[*view.selected_index()].stable_id == id,
+          "refresh preserves filter and remaps selection by ID");
+    library = osu_player::Library{};
+    view.refresh(id);
+    check(view.matches().empty() && !view.selected_index() && view.top() == 0,
+          "refresh handles removal of all visible tracks");
+}
+
 }  // namespace
 
 int main()
@@ -125,6 +144,7 @@ int main()
         test_selection_and_viewport();
         test_filtering_and_empty_results();
         test_terminal_text();
+        test_refreshed_view();
         std::cout << "all TUI model/text tests passed\n";
         return 0;
     } catch (const std::exception& error) {

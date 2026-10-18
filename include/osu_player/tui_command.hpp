@@ -1,9 +1,9 @@
 #pragma once
 
-#include <filesystem>
+#include "osu_player/library_refresh.hpp"
 
 namespace osu_player {
 
-int run_tui_command(const std::filesystem::path& library_file);
+int run_tui_command(RefreshOptions options);
 
 }  // namespace osu_player

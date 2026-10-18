@@ -153,7 +153,7 @@ void draw(const int row, const int column, const std::string_view text, const in
 }
 
 void render(const PlayerController& player, const LibraryView& view, const bool searching,
-            const std::string& notice, const bool colors)
+            const std::string& notice, const bool colors, const bool refreshing)
 {
     int rows{};
     int columns{};
@@ -171,7 +171,7 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
     const std::string summary = "Library: " + std::to_string(player.library().tracks().size()) +
         " | Matches: " + std::to_string(view.matches().size()) +
         " | Shuffle: " + (player.shuffle() ? "on" : "off") +
-        " | Repeat: " + std::string{repeat_name(player.repeat())};
+        " | Repeat: " + std::string{repeat_name(player.repeat())} + (refreshing ? " | Index: running" : "");
     draw(1, 0, summary, columns);
     draw(2, 0, "Search: " + view.query() + (searching ? "_  [Enter apply / Esc cancel]" : ""),
          columns, searching ? A_BOLD : A_NORMAL);
@@ -212,13 +212,13 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
          std::string(static_cast<std::size_t>(bar_width) - filled, '-') + "]", columns);
     draw(rows - 3, 0, notice, columns, A_NORMAL, colors ? 3 : 0);
     draw(rows - 2, 0, "j/k move  Enter play  Space pause  n/p next/prev  / search  q quit", columns);
-    draw(rows - 1, 0, "Left/Right seek  +/- volume  s shuffle  R repeat  x stop  g/G first/last", columns);
+    draw(rows - 1, 0, "Left/Right seek  +/- volume  s shuffle  R repeat  x stop  r refresh", columns);
     wnoutrefresh(stdscr);
     doupdate();
 }
 
 bool normal_key(const wint_t key, const bool special, PlayerController& player,
-                LibraryView& view, bool& searching, std::string& saved_query, std::string& notice)
+                LibraryView& view, bool& searching, std::string& saved_query)
 {
     if (special) {
         switch (key) {
@@ -262,7 +262,6 @@ bool normal_key(const wint_t key, const bool special, PlayerController& player,
             break;
         case '/': saved_query = view.query(); searching = true; break;
         case 27: view.set_query(""); break;
-        case 'r': notice = "Refresh is not implemented yet; re-export the library and restart."; break;
         default: break;
     }
     return true;
@@ -296,25 +295,39 @@ void search_key(const wint_t key, const bool special, LibraryView& view,
 
 }  // namespace
 
-int run_tui_command(const std::filesystem::path& library_file)
+int run_tui_command(RefreshOptions options)
 {
-    std::ifstream input{library_file};
-    if (!input) {
-        throw std::runtime_error{"could not open library file: " + library_file.string()};
-    }
-    auto loaded = load_library_ndjson(input);
-    PlayerController player{std::move(loaded.library), make_audio_player()};
+    PlayerController player{Library{}, make_audio_player()};
     LibraryView view{player.library()};
     Terminal terminal;
     SignalGuard signals;
     BackendLogGuard backend_logs;
-    std::string notice = loaded.warnings.empty() ? "Select a song and press Enter."
-        : std::to_string(loaded.warnings.size()) + " library warnings: " + loaded.warnings.front();
+    const bool export_mode = options.export_file.has_value();
+    LibraryRefresh refresh{std::move(options)};
+    refresh.start(true);
+    std::string notice = export_mode ? "Loading library in background."
+        : "Loading/indexing in background. Close lazer before indexing; r retries.";
     bool searching = false;
     std::string saved_query;
     bool running = true;
     auto next_frame = std::chrono::steady_clock::now();
     while (running && !interrupted) {
+        while (auto event = refresh.poll()) {
+            if (event->loaded) {
+                std::string selected_id;
+                if (const auto index = view.selected_index()) {
+                    selected_id = player.library().tracks()[*index].stable_id;
+                }
+                player.replace_library(std::move(event->loaded->library));
+                view.refresh(selected_id);
+                if (!event->loaded->warnings.empty()) {
+                    event->message += " Warnings: " + std::to_string(event->loaded->warnings.size()) +
+                        "; " + event->loaded->warnings.front();
+                }
+            }
+            notice = std::move(event->message);
+            next_frame = std::chrono::steady_clock::now();
+        }
         int rows{};
         int columns{};
         getmaxyx(stdscr, rows, columns);
@@ -322,7 +335,7 @@ int run_tui_command(const std::filesystem::path& library_file)
         view.set_page_size(static_cast<std::size_t>(std::max(1, rows - 10)));
         const auto now = std::chrono::steady_clock::now();
         if (now >= next_frame) {
-            render(player, view, searching, notice, terminal.colors);
+            render(player, view, searching, notice, terminal.colors, refresh.busy());
             next_frame = now + std::chrono::milliseconds{100};
         }
         wint_t key{};
@@ -333,9 +346,12 @@ int run_tui_command(const std::filesystem::path& library_file)
                     clearok(stdscr, true);
                 } else if (searching) {
                     search_key(key, result == KEY_CODE_YES, view, searching, saved_query);
+                } else if (result != KEY_CODE_YES && key == 'r') {
+                    notice = refresh.start() ? (export_mode ? "Reloading library in background."
+                        : "Indexing in background; lazer must be closed.") : "Refresh already running.";
                 } else {
                     running = normal_key(key, result == KEY_CODE_YES, player, view,
-                                         searching, saved_query, notice);
+                                         searching, saved_query);
                 }
                 next_frame = std::chrono::steady_clock::now();
             }
@@ -353,6 +369,7 @@ int run_tui_command(const std::filesystem::path& library_file)
             next_frame = std::chrono::steady_clock::now();
         }
     }
+    player.pause();
     return interrupted ? 128 + interrupted : 0;
 }
 

@@ -344,6 +344,53 @@ void test_output_failure_is_not_a_bad_track()
           "device failure during output stops the session");
 }
 
+void test_library_refresh()
+{
+    Fixture fixture{4};
+    auto& player = fixture.controller;
+    player.play_track(2);
+    player.seek(450ms);
+    player.set_volume(0.25F);
+    player.set_repeat(RepeatMode::all);
+    auto tracks = make_library(5).tracks();
+    tracks[2].title = "! new metadata"; // Sorts the current ID to row zero.
+    player.replace_library(osu_player::Library{tracks});
+    check(player.current_index() == 0 && player.current_track()->stable_id == "00002",
+          "refresh remaps current selection by stable ID, not sorted index");
+    check(player.state() == PlayerState::playing && player.position() == 450ms &&
+          fixture.audio->attempts.size() == 1 && fixture.audio->play_calls == 1,
+          "surviving stream is not reloaded, paused, rewound, or restarted");
+    check(player.volume() == 0.25F && player.repeat() == RepeatMode::all,
+          "refresh preserves playback preferences");
+    player.pause();
+    player.replace_library(make_library(10'001));
+    check(player.current_index() == 2 && player.state() == PlayerState::paused && player.position() == 450ms,
+          "large refresh retains paused state and position");
+    player.set_shuffle(true);
+    const auto old_queue = player.queue();
+    player.replace_library(make_library(10'003));
+    check(std::equal(old_queue.begin(), old_queue.end(), player.queue().begin()) &&
+          player.queue().size() == 10'003 && player.current_index() == 2,
+          "shuffle refresh preserves surviving queue order and appends new entries");
+    auto removed = make_library(10).tracks();
+    removed.erase(removed.begin() + 2);
+    player.play();
+    player.replace_library(osu_player::Library{removed});
+    check(!player.current_index() && player.state() == PlayerState::stopped &&
+          fixture.audio->state() != osu_player::PlaybackState::playing,
+          "removing current track pauses without autoplaying another");
+    player.play_track(0);
+    auto changed_hash = player.library().tracks();
+    changed_hash[0].audio_hash = std::string(64, 'b');
+    player.replace_library(osu_player::Library{changed_hash});
+    check(!player.current_index() && player.state() == PlayerState::stopped,
+          "same ID with changed audio hash must not inherit the old stream");
+    player.replace_library(osu_player::Library{});
+    check(player.queue().empty() && player.state() == PlayerState::empty, "empty refresh clears queue safely");
+    player.replace_library(make_library(2));
+    check(player.state() == PlayerState::stopped && !player.current_index(), "nonempty refresh never autoplays");
+}
+
 }  // namespace
 
 int main()
@@ -358,6 +405,7 @@ int main()
         test_directional_failure_skipping();
         test_seek_stop_and_resume_failures();
         test_output_failure_is_not_a_bad_track();
+        test_library_refresh();
         std::cout << "all player controller tests passed\n";
         return 0;
     } catch (const std::exception& error) {

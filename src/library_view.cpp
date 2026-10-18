@@ -59,6 +59,18 @@ void LibraryView::page_down()
 }
 
 const std::string& LibraryView::query() const noexcept { return query_; }
+void LibraryView::refresh(const std::string_view selected_stable_id)
+{
+    matches_ = library_.search(query_);
+    selected_ = 0;
+    for (std::size_t row = 0; row < matches_.size(); ++row) {
+        if (library_.tracks()[matches_[row]].stable_id == selected_stable_id) {
+            selected_ = row;
+            break;
+        }
+    }
+    ensure_visible();
+}
 const std::vector<std::size_t>& LibraryView::matches() const noexcept { return matches_; }
 std::optional<std::size_t> LibraryView::selected_index() const noexcept
 {

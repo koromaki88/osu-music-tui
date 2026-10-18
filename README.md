@@ -14,7 +14,7 @@ with both line-based controls and an ncurses TUI.
 - [x] Play audio (pause/resume, stop, seek, volume, EOF handling)
 - [x] Playback controller (queue, next/previous, shuffle, repeat, failed-track recovery)
 - [x] Ncurses TUI (search, selection, progress, transport controls, resize handling)
-- [ ] Background indexing/refresh and XDG cache
+- [x] Background indexing/refresh and XDG cache (offline Realm snapshots only)
 
 ## Current commands
 
@@ -146,6 +146,7 @@ continues. Monochrome terminals work without colors.
 | `s` | Toggle shuffle |
 | `R` | Cycle repeat off → one → all |
 | `x` | Stop and rewind |
+| `r` | Refresh in the background (reload the export, or rerun the indexer) |
 | `/` | Edit the search filter |
 | Esc | Clear the filter outside search mode |
 | `q` | Quit outside search mode |
@@ -160,8 +161,58 @@ The UI stays open after queue completion or playback errors, so you can choose a
 track or retry a device. Errors appear in a status line instead of overwriting the screen.
 Metadata controls/escape sequences are neutralized and text is clipped by terminal cell
 width; complex emoji grapheme clusters are not fully modeled. Quit, Ctrl-C, SIGTERM, and
-SIGHUP restore terminal settings. No mouse support, live refresh, or automatic indexing
-is implemented yet; `r` displays a reminder to re-export/restart.
+SIGHUP restore terminal settings. Mouse support and indexing while lazer is running are
+not implemented.
+
+### Background indexing and cache
+
+You can now browse directly from a lazer data directory instead of exporting by hand.
+**Close lazer before starting this mode or pressing `r`.** Background indexing means the
+player stays responsive; it does **not** make copying a live Realm database safe.
+
+```bash
+make indexer
+./bin/osu-player tui --osu-dir "$HOME/.local/share/osu"
+# For slow storage / larger libraries:
+./bin/osu-player tui --osu-dir /path/to/osu-data --index-timeout 900
+# Bypass all cache reads/writes:
+./bin/osu-player tui --osu-dir /path/to/osu-data --no-cache
+```
+
+The default adapter command uses the built Release DLL under `tools/osu-indexer/` and
+the local `.tools/dotnet/dotnet` if present, otherwise `dotnet` on PATH. Paths are resolved
+relative to the player's development build location, not the shell's working directory.
+For another installation, pass `--indexer /absolute/path/to/osu-indexer` (an executable
+or wrapper accepting `--osu-dir DIRECTORY`, not a shell command string or a DLL).
+No build/restore runs inside the UI. `--index-timeout` accepts 1–86400 seconds, default 300.
+
+Cache files live under `$XDG_CACHE_HOME/osu-music-player/`, or
+`$HOME/.cache/osu-music-player/` if XDG_CACHE_HOME is unset/relative. Each canonical osu!
+directory gets a separate, private (0600) NDJSON file. Its header records the full source
+path, cache version, track count, and Realm identity/size/nanosecond timestamps. Startup
+loads a validated cache on the worker; an unchanged Realm needs no adapter process.
+A stale cache is shown while indexing runs. A missing database or failed refresh leaves
+the last usable library/cache intact. Corrupt/truncated caches trigger reindexing.
+
+Pressing `r` always forces a refresh, even with an unchanged Realm. Only one refresh runs
+at a time. For `tui FILE`, `r` simply reloads that export asynchronously, without an adapter
+or cache. A valid header-only export intentionally replaces the library with an empty one.
+Warnings and failures appear in the status line; cache-write errors do not prevent using
+a successfully indexed library.
+
+Refresh preserves the query, visible selection by stable ID when still matched, playback
+preferences, and shuffled order of surviving entries (new entries append in random order).
+If the current stable ID **and audio hash** survive, the loaded stream is untouched: no
+reload, seek, pause, or restart. If removed or replaced, playback pauses and selection
+clears without autoplay. Failed-track suppression resets so repaired audio can be retried.
+
+The worker spawns the adapter directly, without a shell, with private disk-backed stdout,
+stderr, and temporary snapshots. It checks Realm metadata before/after indexing, validates
+the complete export, then fsyncs a same-directory temporary cache file and atomically
+renames it. Cache/temp locations inside the osu! directory are rejected. Quit/signals and
+timeouts terminate the adapter process group, reap the direct child, and clean its private temporary tree.
+Output limits are 512 MiB for NDJSON and 1 MiB for diagnostics. Freshness does not hash the
+audio tree or watch imports; use `r` after closing lazer when content-store changes matter.
 
 Validate and display the fixture-driven library model:
 
@@ -259,6 +310,13 @@ opens a pseudo-terminal with generated audio and dummy output to test real key i
 Unicode editing, resize, empty/monochrome screens, device failures, and terminal cleanup
 on quit, SIGINT, and SIGTERM. These tests never launch osu! or play audible sound.
 
+`tests/refresh_integration.py` uses a disposable fake adapter and PTY to test responsive
+refresh during playing/paused audio, retained filters/selections, cache hits/isolation,
+stale/corrupt/truncated caches, malformed output, concurrent source changes, missing
+databases, cache-write errors, timeout, cancellation, process reaping, snapshot cleanup,
+and export-file reloads. Controller tests also cover library replacement with 10,001+
+entries without reloading the current audio. No real-library scan is needed for these tests.
+
 Run `make clean` before switching between regular and sanitizer Make builds.
 
 The intended CMake build, once CMake and Ninja are installed, is:
@@ -269,5 +327,5 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-The implementation only reads files. It does not write to `client.realm` or lazer's
-content store.
+The implementation writes only its own caches and temporary files. It does not write to
+`client.realm` or lazer's content store.

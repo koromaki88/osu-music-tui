@@ -145,13 +145,14 @@ class Screen:
 
 
 class Session:
-    def __init__(self, executable, library, **environment):
+    def __init__(self, executable, library=None, *, arguments=None, **environment):
         self.master, self.slave = pty.openpty()
         self.screen = Screen(24, 100)
         self.original_attributes = termios.tcgetattr(self.slave)
         fcntl.ioctl(self.slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
         self.process = subprocess.Popen(
-            [executable, "tui", str(library)], stdin=self.slave, stdout=self.slave,
+            [executable, "tui", *(arguments if arguments is not None else [str(library)])],
+            stdin=self.slave, stdout=self.slave,
             stderr=subprocess.PIPE, start_new_session=True,
             env=dict(os.environ, TERM="xterm-256color", LANG="C.UTF-8", LC_ALL="C.UTF-8",
                      SDL_AUDIODRIVER="dummy") | environment,
@@ -299,7 +300,8 @@ def main():
 
         with Session(options.player_binary, library,
                      SDL_AUDIODRIVER="osu-player-nonexistent-driver") as session:
-            session.expect("osu! music player")
+            # The screen can render before the background loader publishes tracks.
+            session.expect("Library: 3", "State: stopped")
             session.send("\n")
             session.expect("Audio error:", "State: failed")
             session.send("q")

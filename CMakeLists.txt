@@ -43,10 +43,11 @@ add_library(osu_player_core
     src/player_controller.cpp
     src/library_view.cpp
     src/terminal_text.cpp
+    src/library_refresh.cpp
 )
 
 target_include_directories(osu_player_core PUBLIC include)
-target_link_libraries(osu_player_core PRIVATE PkgConfig::JSON_C)
+target_link_libraries(osu_player_core PRIVATE PkgConfig::JSON_C Threads::Threads)
 osu_player_set_warnings(osu_player_core)
 osu_player_enable_sanitizers(osu_player_core)
 
@@ -93,6 +94,8 @@ if(BUILD_TESTING)
     add_test(NAME tui-model COMMAND tui-model-tests)
     add_test(NAME tui COMMAND Python3::Interpreter
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tui_integration.py --player-binary $<TARGET_FILE:osu-player>)
+    add_test(NAME refresh COMMAND Python3::Interpreter
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/refresh_integration.py --player-binary $<TARGET_FILE:osu-player>)
 
     add_executable(audio-player-tests tests/audio_player_test.cpp)
     target_link_libraries(audio-player-tests PRIVATE osu_player_audio Threads::Threads)

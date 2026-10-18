@@ -4,6 +4,7 @@
 #include <numeric>
 #include <stdexcept>
 #include <utility>
+#include <unordered_map>
 
 namespace osu_player {
 
@@ -173,6 +174,52 @@ void PlayerController::set_shuffle(const bool enabled)
 }
 
 void PlayerController::set_repeat(const RepeatMode mode) noexcept { repeat_ = mode; }
+
+void PlayerController::replace_library(Library library)
+{
+    const auto identity = [](const Track& track) { return track.stable_id + '\0' + track.audio_hash; };
+    std::unordered_map<std::string, std::size_t> indices;
+    for (std::size_t index = 0; index < library.tracks().size(); ++index) {
+        indices.emplace(identity(library.tracks()[index]), index);
+    }
+    std::vector<std::size_t> queue;
+    queue.reserve(library.tracks().size());
+    std::vector<bool> used(library.tracks().size(), false);
+    std::optional<std::size_t> current;
+    if (const auto* track = current_track()) {
+        const auto found = indices.find(identity(*track));
+        if (found != indices.end()) { current = found->second; }
+    }
+    if (shuffle_) {
+        // Retain the surviving shuffled order, including the played prefix.
+        for (const auto index : queue_) {
+            const auto found = indices.find(identity(library_.tracks()[index]));
+            if (found != indices.end() && !used[found->second]) {
+                queue.push_back(found->second);
+                used[found->second] = true;
+            }
+        }
+    }
+    const auto existing = queue.size();
+    for (std::size_t index = 0; index < used.size(); ++index) {
+        if (!used[index]) { queue.push_back(index); }
+    }
+    if (shuffle_) {
+        std::shuffle(queue.begin() + static_cast<std::ptrdiff_t>(existing), queue.end(), random_);
+    }
+    std::optional<std::size_t> cursor;
+    if (current) {
+        cursor = static_cast<std::size_t>(std::find(queue.begin(), queue.end(), *current) - queue.begin());
+    }
+    std::vector<bool> failures(queue.size(), false); // Refresh retries repaired files.
+    if (!current) { audio_->pause(); }
+    library_ = std::move(library);
+    queue_ = std::move(queue);
+    failed_tracks_ = std::move(failures);
+    cursor_ = cursor;
+    if (!current) { state_ = queue_.empty() ? PlayerState::empty : PlayerState::stopped; }
+}
+
 const Library& PlayerController::library() const noexcept { return library_; }
 const std::vector<std::size_t>& PlayerController::queue() const noexcept { return queue_; }
 

@@ -27,7 +27,7 @@ struct PlaybackErrors {
 };
 
 // Owns its library and backend. All methods run on one control thread. The queue
-// stores library indices, not pointers that would be invalidated by reordering.
+// stores library indices, remapped on refresh rather than retaining track pointers.
 class PlayerController {
 public:
     PlayerController(Library library, std::unique_ptr<AudioPlayer> audio,
@@ -44,6 +44,9 @@ public:
     void set_volume(float volume);
     void set_shuffle(bool enabled);
     void set_repeat(RepeatMode mode) noexcept;
+    // Keeps the loaded stream untouched when stable ID + hash survives. If it
+    // disappears, pause and clear selection (never autoplay a replacement).
+    void replace_library(Library library);
 
     [[nodiscard]] const Library& library() const noexcept;
     [[nodiscard]] const std::vector<std::size_t>& queue() const noexcept;

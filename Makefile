@@ -16,7 +16,7 @@ ifeq ($(SANITIZE),1)
     LDFLAGS += -fsanitize=address,undefined
 endif
 
-CORE_OBJECTS := obj/library.o obj/library_loader.o obj/storage_path.o obj/track.o obj/player_controller.o obj/library_view.o obj/terminal_text.o
+CORE_OBJECTS := obj/library.o obj/library_loader.o obj/storage_path.o obj/track.o obj/player_controller.o obj/library_view.o obj/terminal_text.o obj/library_refresh.o
 AUDIO_OBJECTS := obj/audio_probe.o obj/audio_player.o
 PLAYER_OBJECTS := obj/main.o obj/play_command.o obj/tui_command.o $(AUDIO_OBJECTS) $(CORE_OBJECTS)
 STORAGE_TEST_OBJECTS := obj/storage_path_test.o $(CORE_OBJECTS)
@@ -43,10 +43,10 @@ bin/audio-player-tests: $(AUDIO_TEST_OBJECTS) | bin
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 bin/player-controller-tests: $(CONTROLLER_TEST_OBJECTS) | bin
-	$(CXX) $(LDFLAGS) $^ $(shell $(PKG_CONFIG) --libs json-c) -o $@
+	$(CXX) $(LDFLAGS) $^ $(shell $(PKG_CONFIG) --libs json-c) -pthread -o $@
 
 bin/tui-model-tests: $(TUI_TEST_OBJECTS) | bin
-	$(CXX) $(LDFLAGS) $^ $(shell $(PKG_CONFIG) --libs json-c) -o $@
+	$(CXX) $(LDFLAGS) $^ $(shell $(PKG_CONFIG) --libs json-c) -pthread -o $@
 
 obj/%.o: src/%.cpp | obj
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
@@ -65,6 +65,7 @@ test: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-t
 	python3 -m unittest discover -s tests -p 'test_*.py'
 	python3 tests/audio_integration.py
 	python3 tests/tui_integration.py
+	python3 tests/refresh_integration.py
 
 indexer:
 	$(DOTNET) restore tools/osu-indexer --locked-mode

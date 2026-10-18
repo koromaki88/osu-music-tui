@@ -5,11 +5,14 @@
 #include "osu_player/tui_command.hpp"
 
 #include <filesystem>
+#include <charconv>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace {
 
@@ -18,6 +21,8 @@ constexpr std::string_view usage =
     "       osu-player play HASH [OSU_DATA_DIRECTORY]\n"
     "       osu-player queue NDJSON_FILE\n"
     "       osu-player tui NDJSON_FILE\n"
+    "       osu-player tui --osu-dir DIRECTORY [--indexer EXECUTABLE] [--no-cache]\n"
+    "                      [--index-timeout SECONDS]\n"
     "       osu-player library NDJSON_FILE|- [SEARCH]\n"
     "\n"
     "Commands:\n"
@@ -93,6 +98,39 @@ int run_library(const int argc, char* argv[])
     return 0;
 }
 
+int run_tui(const int argc, char* argv[])
+{
+    osu_player::RefreshOptions options;
+    if (argc == 3 && std::string_view{argv[2]} != "-" && !std::string_view{argv[2]}.starts_with("--")) {
+        options.export_file = argv[2];
+        return osu_player::run_tui_command(std::move(options));
+    }
+    bool directory = false;
+    for (int index = 2; index < argc; ++index) {
+        const std::string_view argument{argv[index]};
+        if (argument == "--no-cache") { options.use_cache = false; }
+        else if ((argument == "--osu-dir" || argument == "--indexer" || argument == "--index-timeout") && index + 1 < argc) {
+            const std::string_view value{argv[++index]};
+            if (argument == "--osu-dir") { options.osu_directory = value; directory = true; }
+            else if (argument == "--indexer") { options.adapter_command = {std::string{value}}; }
+            else {
+                int seconds{};
+                const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), seconds);
+                if (error != std::errc{} || end != value.data() + value.size() || seconds < 1 || seconds > 86400) {
+                    throw std::runtime_error{"--index-timeout must be 1..86400 seconds"};
+                }
+                options.timeout = std::chrono::seconds{seconds};
+            }
+        } else {
+            std::cerr << "invalid tui arguments; stdin is reserved for keyboard input\n" << usage;
+            return 2;
+        }
+    }
+    if (!directory || options.osu_directory.empty()) { std::cerr << usage; return 2; }
+    if (options.adapter_command.empty()) { options.adapter_command = osu_player::default_indexer_command(); }
+    return osu_player::run_tui_command(std::move(options));
+}
+
 int run(const int argc, char* argv[])
 {
     if (argc < 2) {
@@ -101,6 +139,7 @@ int run(const int argc, char* argv[])
     }
 
     const std::string_view command{argv[1]};
+    if (command == "--help") { std::cout << usage; return 0; }
     if (command == "probe") {
         return run_probe(argc, argv);
     }
@@ -124,11 +163,7 @@ int run(const int argc, char* argv[])
         return osu_player::run_queue_command(argv[2]);
     }
     if (command == "tui") {
-        if (argc != 3 || std::string_view{argv[2]} == "-") {
-            std::cerr << "tui requires a library file; stdin is reserved for keyboard input\n" << usage;
-            return 2;
-        }
-        return osu_player::run_tui_command(argv[2]);
+        return run_tui(argc, argv);
     }
 
     std::cerr << "error: unknown command '" << command << "'\n\n" << usage;

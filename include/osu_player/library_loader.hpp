@@ -5,6 +5,7 @@
 #include <istream>
 #include <stdexcept>
 #include <string>
+#include <stop_token>
 #include <vector>
 
 namespace osu_player {
@@ -23,6 +24,6 @@ struct LibraryLoadResult {
     std::vector<std::string> warnings;
 };
 
-[[nodiscard]] LibraryLoadResult load_library_ndjson(std::istream& input);
+[[nodiscard]] LibraryLoadResult load_library_ndjson(std::istream& input, std::stop_token stop = {});
 
 }  // namespace osu_player

@@ -5,12 +5,14 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace osu_player {
 
-// Pure selection/viewport state. The referenced immutable library must outlive
-// this view. Filtering never reorders the controller's playback queue.
+// Pure selection/viewport state. The referenced library object must outlive
+// this view; call refresh after replacing its contents. Filtering never reorders
+// the controller's playback queue.
 class LibraryView {
 public:
     explicit LibraryView(const Library& library);
@@ -21,6 +23,8 @@ public:
     void end();
     void page_up();
     void page_down();
+    // Call after the referenced Library is replaced; old row indices are stale.
+    void refresh(std::string_view selected_stable_id);
 
     [[nodiscard]] const std::string& query() const noexcept;
     [[nodiscard]] const std::vector<std::size_t>& matches() const noexcept;
