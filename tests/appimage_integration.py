@@ -12,8 +12,9 @@ import tempfile
 import wave
 from unittest.mock import patch
 
-from tui_integration import Session, exercise_settings, exercise_ui, write_library
+from tui_integration import Session, exercise_settings, exercise_ui, exercise_lastfm_setup, write_library
 from discord_integration import tui_tests as exercise_discord
+from lastfm_integration import exercise_lastfm_https
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -32,6 +33,9 @@ def main():
     image = options.appimage.resolve()
     dotnet = shutil.which(options.dotnet) or str(Path(options.dotnet).resolve())
     ffmpeg = shutil.which("ffmpeg")
+    openssl = shutil.which("openssl")
+    if not openssl:
+        parser.error("packaging tests require openssl to generate isolated TLS fixtures")
     if not ffmpeg:
         parser.error("packaging tests require ffmpeg to generate disposable MP3/Ogg fixtures")
     expected = image.with_suffix(image.suffix + ".sha256").read_text().split()[0]
@@ -69,7 +73,9 @@ def main():
             appdir = moved / "squashfs-root"
             launcher = str(appdir / "AppRun")
             manifest = json.loads((appdir / "usr/share/osu-player/build-manifest.json").read_text())
-            assert manifest["version"] == "0.3.0"
+            assert manifest["version"] == "0.4.0"
+            certificates = appdir / "usr/share/osu-player/ca-certificates.crt"
+            assert hashlib.sha256(certificates.read_bytes()).hexdigest() == manifest["ca_bundle_sha256"]
             runtime = json.loads((appdir / "usr/lib/osu-player/indexer/osu-indexer.runtimeconfig.json").read_text())
             assert "framework" not in runtime["runtimeOptions"], "indexer must be self-contained"
             assert runtime["runtimeOptions"]["tfm"] == "net10.0"
@@ -95,6 +101,8 @@ def main():
             write_library(exported, records)
             exercise_ui(launcher, exported)
             exercise_settings(launcher, exported, root)
+            exercise_lastfm_setup(launcher, exported, root)
+            exercise_lastfm_https(launcher, root / "lastfm-https", openssl)
             discord_root = root / "discord"
             discord_root.mkdir()
             exercise_discord(launcher, discord_root)

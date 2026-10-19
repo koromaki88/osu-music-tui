@@ -22,7 +22,7 @@ SMOKE_IMAGE = "debian:bookworm-slim@sha256:a4672c0cb26fbdde88e38fa2dfb6c68194230
 def source_snapshot(root, destination):
     # Explicit allowlist, independent of Docker ignore semantics. Never mount the
     # working tree itself: it may contain SDKs, artifacts, or the game executable.
-    patterns = ("Makefile", "README.md", "DEVELOPMENT.md", "CHANGELOG.md", "src/*.cpp", "include/osu_player/*.hpp",
+    patterns = ("Makefile", "README.md", "DEVELOPMENT.md", "CHANGELOG.md", "src/*.cpp", "src/*.hpp", "include/osu_player/*.hpp",
                 "tests/*.py", "tests/*.cpp", "tests/*.hpp", "tests/fixtures/*.ndjson",
                 "tests/osu-indexer-tests/*.cs", "tests/osu-indexer-tests/*.csproj",
                 "tests/osu-indexer-tests/packages.lock.json", "tools/package_appimage.py",
@@ -82,6 +82,18 @@ cd "$(mktemp -d)"
 LD_LIBRARY_PATH="$PWD/squashfs-root/usr/lib" \
   ./squashfs-root/usr/lib/osu-player/indexer/osu-indexer --osu-dir /input/fixture > library.ndjson
 ./squashfs-root/AppRun library library.ndjson
+# Check fallback selection on this deliberately CA-less minimal image, without
+# replacing anything in the candidate or making any external network request.
+mkdir -p trust-check/usr/bin trust-check/usr/share/osu-player
+cp squashfs-root/AppRun trust-check/AppRun
+cp squashfs-root/usr/share/osu-player/ca-certificates.crt trust-check/usr/share/osu-player/
+cat > trust-check/usr/bin/osu-player <<'CHECK'
+#!/bin/sh
+test "$SSL_CERT_FILE" = "$APPDIR/usr/share/osu-player/ca-certificates.crt"
+test -s "$SSL_CERT_FILE"
+CHECK
+chmod +x trust-check/usr/bin/osu-player
+SSL_CERT_FILE= ./trust-check/AppRun
 """])
         with (staging / FILES[0]).open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()

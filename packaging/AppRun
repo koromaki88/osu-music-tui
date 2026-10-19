@@ -8,4 +8,17 @@ export APPDIR
 export LD_LIBRARY_PATH="$APPDIR/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export TERMINFO_DIRS="$APPDIR/usr/share/terminfo:${TERMINFO_DIRS:-}"
 
+# Prefer current host trust roots, respect explicit user configuration, and retain
+# verified HTTPS on a minimal host with no CA certificate package installed.
+if [ -z "${SSL_CERT_FILE:-}" ]; then
+    SSL_CERT_FILE="$APPDIR/usr/share/osu-player/ca-certificates.crt"
+    for candidate in /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/cert.pem; do
+        if [ -r "$candidate" ] && [ -s "$candidate" ]; then
+            SSL_CERT_FILE="$candidate"
+            break
+        fi
+    done
+    export SSL_CERT_FILE
+fi
+
 exec "$APPDIR/usr/bin/osu-player" "$@"

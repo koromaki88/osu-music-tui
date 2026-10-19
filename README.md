@@ -66,7 +66,7 @@ is needed to run it.
 Install the generated local package, then close lazer and start the player:
 
 ```bash
-sudo pacman -U artifacts/arch/osu-music-player-0.3.0-1-x86_64.pkg.tar.zst
+sudo pacman -U artifacts/arch/osu-music-player-0.4.0-1-x86_64.pkg.tar.zst
 osu-player tui
 ```
 
@@ -302,10 +302,10 @@ Sandboxed Discord installations may need an accessible IPC socket; an absolute
 and live Discord rendering has been reported working by the user. Version 0.3.0
 includes this feature; older 0.2.0 packages do not.
 
-### Last.fm setup (development build)
+### Last.fm setup (0.4.0+)
 
-Browser authorization, Now Playing, and scrobbling are available in the source-build
-TUI, **not in the existing 0.3.0 packages**. Last.fm defaults off and is independent
+Browser authorization, Now Playing, and scrobbling are available in the TUI in
+0.4.0 and newer; older 0.3.0 packages do not include Last.fm. Last.fm defaults off and is independent
 of Discord. Existing authorization still works; no new API credentials are needed.
 
 1. Obtain your own application API key and shared secret at
@@ -336,6 +336,9 @@ artist/title and audio duration when known, once per playback session; failed or
 ignored updates are not retried. Local paths, hashes, library IDs, beatmap IDs, and
 invented album metadata are not sent. Pause/stop prevents new Now Playing updates but cannot
 clear an update already accepted by Last.fm; it expires on the service.
+`SSL_CERT_FILE` can explicitly select a trusted CA bundle. The AppImage prefers a
+host certificate store and otherwise uses its bundled fallback; TLS verification
+is never disabled. Rebuild/update the AppImage to refresh that fallback bundle.
 
 Scrobbles are queued when audio is **longer than 30 seconds** and actual credited
 listening reaches half its duration or four minutes, whichever is sooner. Pauses and

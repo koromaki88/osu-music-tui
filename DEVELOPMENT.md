@@ -75,6 +75,41 @@ use isolated fake sockets only. Last.fm is not included. These are local unsigne
 packages, not public-distribution approval. This validation record was added after
 packaging and is not embedded in the already-built packages.
 
+### Local 0.4.0 release validation
+
+- Native `make test` and synthetic `make test-indexer` passed, including the
+  isolated real-libcurl HTTPS fixture (no Last.fm contact).
+- `DOTNET_ROOT="$PWD/.tools/dotnet10" make test-arch-package ARCH_PACKAGE_FLAGS=--nodeps`
+  passed: build-time native/synthetic tests, extracted-package version/dependency/ABI
+  metadata, packaged indexer, dummy playback/PTY/settings, Discord fake IPC, Last.fm
+  setup, and isolated HTTPS authorization/Now Playing/scrobbling/restart/TLS rejection.
+  Output: `artifacts/arch/osu-music-player-0.4.0-1-x86_64.pkg.tar.zst` (about 4.4 MiB),
+  with adjacent verified SHA-256. Dependency checks were skipped because the host
+  lacks pacman-managed .NET packages; installation/dependency resolution remain untested.
+- `make test-appimage` passed: 0.4.0 x86-64/glibc 2.36 baseline, relocation and
+  extract-and-run, synthetic indexing, no installed .NET/tools on PATH, WAV/MP3/Ogg
+  dummy playback, PTY/settings, Discord fake IPC, Last.fm setup and isolated HTTPS
+  authorization/Now Playing/scrobbling/restart/certificate/hostname rejection.
+  The minimal Debian smoke test also passed, including bundled CA fallback selection.
+  Output: `artifacts/dist/osu-player-x86_64.AppImage` (about 101.2 MiB), with adjacent
+  checksum and manifest. Both final package checksums were independently rechecked.
+  FUSE mounting remains untested; extraction/run was validated.
+- The first attempts timed out; later attempts exposed fixture-only clean TLS-close
+  handling and cleared-PATH fixture-generator bugs, now corrected. Failure logs
+  are retained as `artifacts/test-appimage-timeout.log`,
+  `artifacts/test-appimage-tls-fixture-failure.log`,
+  `artifacts/test-appimage-fixture-path-failure.log`,
+  `artifacts/test-arch-package-timeout.log`, and `artifacts/arch-package-timeout.log`.
+- Previous AppImage artifacts are preserved under `artifacts/releases/0.3.0/appimage/`;
+  older versioned Arch packages remain untouched.
+- Successful logs: `artifacts/tests.log`, `artifacts/test-indexer.log`,
+  `artifacts/test-appimage.log`, `artifacts/arch-package.log`, and
+  `artifacts/test-arch-package.log`.
+
+No game launch, real-library scan, installation, publication, commit, or tag is part
+of this validation. Public distribution remains blocked on licensing/compliance.
+This validation record is maintained after builds and may not be embedded in them.
+
 ## Last.fm development implementation
 
 The native source build now includes optional personal API credentials, browser
@@ -109,6 +144,16 @@ do not contact Last.fm, launch osu!, or scan a real library. The user has confir
 live authorization, Now Playing, and scrobble submission working in the native build.
 The focused Last.fm ASan/UBSan suite also passes; its log is
 `artifacts/lastfm-sanitizer.log`. The complete native-suite log is `artifacts/tests.log`.
+
+`tests/lastfm_integration.py` also exercises real libcurl HTTPS through an isolated
+loopback CONNECT proxy serving only synthetic Last.fm responses. Ephemeral fixture
+certificates check trusted requests, untrusted roots, and hostname mismatch without
+contacting Last.fm or using personal credentials. It verifies signed authorization,
+Now Playing, threshold submission, durable receipts, and restart without autoplay
+or duplicate submission. Native and extracted-package tests run the same fixture.
+`SSL_CERT_FILE` explicitly selects the trust bundle. AppImage launch prefers current
+host roots and otherwise supplies its hashed bundled CA fallback; the minimal-image
+smoke test checks fallback selection. Verification is never disabled.
 
 ### Durable scrobbling
 

@@ -118,6 +118,7 @@ _test: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-
 	python3 -m unittest discover -s tests -p 'test_*.py'
 	python3 tests/audio_integration.py
 	python3 tests/tui_integration.py
+	python3 tests/lastfm_integration.py
 	python3 tests/refresh_integration.py
 
 indexer:

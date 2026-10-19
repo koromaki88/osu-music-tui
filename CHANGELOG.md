@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.0
+
+- Packaged optional Last.fm authorization, Now Playing, and durable scrobbling;
+  native live submission was user-confirmed. Added isolated TLS/package regressions.
+- AppImage uses host CA certificates when available, with a bundled fallback for
+  minimal systems. Explicit `SSL_CERT_FILE` is respected; TLS remains verified.
 - Hardened Last.fm private-file operations with validated directory descriptors,
   descriptor-relative atomic writes, hard-link rejection, and close-on-exec files.
 - Bounded retry waits across clock changes, rejected malformed numeric API errors,

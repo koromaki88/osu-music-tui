@@ -8,8 +8,9 @@ import subprocess
 import tempfile
 import wave
 
-from tui_integration import Session, exercise_settings, exercise_ui, write_library
+from tui_integration import Session, exercise_settings, exercise_ui, exercise_lastfm_setup, write_library
 from discord_integration import tui_tests as exercise_discord
+from lastfm_integration import exercise_lastfm_https
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -23,7 +24,7 @@ def fingerprint(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path,
-                        default=ROOT / "artifacts/arch/osu-music-player-0.3.0-1-x86_64.pkg.tar.zst")
+                        default=ROOT / "artifacts/arch/osu-music-player-0.4.0-1-x86_64.pkg.tar.zst")
     parser.add_argument("--dotnet", default="dotnet")
     options = parser.parse_args()
     package = options.package.resolve()
@@ -36,7 +37,9 @@ def main():
         unpacked.mkdir()
         subprocess.run(["bsdtar", "-xf", str(package), "-C", str(unpacked)], check=True)
         metadata = (unpacked / ".PKGINFO").read_text()
-        assert "pkgver = 0.3.0-1" in metadata
+        assert "pkgver = 0.4.0-1" in metadata
+        for dependency in ("curl", "openssl", "ca-certificates"):
+            assert f"depend = {dependency}\n" in metadata
         assert "depend = dotnet-runtime-10.0" in metadata
         assert "depend = libavcodec.so=" in metadata, "FFmpeg ABI dependency is missing"
         indexer = unpacked / "usr/lib/osu-player/indexer"
@@ -74,6 +77,8 @@ def main():
         write_library(exported, records)
         exercise_ui(player, exported)
         exercise_settings(player, exported, root)
+        exercise_lastfm_setup(player, exported, root)
+        exercise_lastfm_https(player, root / "lastfm-https")
         discord_root = root / "discord"
         discord_root.mkdir()
         exercise_discord(player, discord_root)

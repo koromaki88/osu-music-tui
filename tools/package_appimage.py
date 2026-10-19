@@ -239,14 +239,18 @@ def build(options):
             shutil.copy2(ROOT / "packaging" / name, appdir / name)
         (appdir / "AppRun").chmod(0o755)
         copy_notices(appdir, indexer)
-        manifest = {"version": "0.3.0", "architecture": "x86_64", "glibc_minimum": glibc_requirement(appdir),
+        certificates = appdir / "usr/share/osu-player/ca-certificates.crt"
+        certificates.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2("/etc/ssl/certs/ca-certificates.crt", certificates)
+        manifest = {"version": "0.4.0", "architecture": "x86_64", "glibc_minimum": glibc_requirement(appdir),
+                    "ca_bundle_sha256": sha256(certificates),
                     "dotnet_runtime": RUNTIME_VERSION, "appimagetool_sha256": TOOL_SHA256,
                     "libraries": libraries,
                     "host_requirements": ["Linux x86-64", "compatible glibc and /bin/sh",
                                           "audio services/drivers", "UTF-8 locale"]}
         manifest_text = json.dumps(manifest, indent=2) + "\n"
         info = appdir / "usr/share/osu-player"
-        info.mkdir(parents=True)
+        info.mkdir(parents=True, exist_ok=True)
         (info / "build-manifest.json").write_text(manifest_text)
         shutil.copy2(ROOT / "README.md", info / "README.md")
         for name in ("CHANGELOG.md", "DEVELOPMENT.md"):
@@ -261,7 +265,7 @@ def build(options):
         packed = work / "osu-player-x86_64.AppImage"
         run([work / "squashfs-root/AppRun", "--no-appstream", "--runtime-file", runtime,
              "--mksquashfs-opt", "-processors", "--mksquashfs-opt", "2", appdir, packed],
-             env=dict(os.environ, ARCH="x86_64", VERSION="0.3.0"))
+              env=dict(os.environ, ARCH="x86_64", VERSION="0.4.0"))
         packed.chmod(0o755)
         os.replace(packed, output)
         output.with_suffix(output.suffix + ".sha256").write_text(f"{sha256(output)}  {output.name}\n")

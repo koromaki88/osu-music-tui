@@ -11,6 +11,7 @@
 
 #include <array>
 #include <cerrno>
+#include <cstdlib>
 #include <memory>
 #include <stdexcept>
 #include <string_view>
@@ -281,10 +282,13 @@ LastfmResponse lastfm_https(const LastfmParameters& parameters, const LastfmCanc
     option(CURLOPT_FOLLOWLOCATION, 0L);
     option(CURLOPT_SSL_VERIFYPEER, 1L);
     option(CURLOPT_SSL_VERIFYHOST, 2L);
+    // Match OpenSSL's standard explicit trust-store override. AppRun supplies
+    // a host store when available, otherwise its bundled fallback. Never disable TLS.
+    if (const auto* ca_file = std::getenv("SSL_CERT_FILE"); ca_file && *ca_file) { option(CURLOPT_CAINFO, ca_file); }
     option(CURLOPT_POST, 1L);
     option(CURLOPT_POSTFIELDS, body.c_str());
     option(CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
-    option(CURLOPT_USERAGENT, "osu-music-player/0.3.0");
+    option(CURLOPT_USERAGENT, "osu-music-player/0.4.0");
     option(CURLOPT_CONNECTTIMEOUT_MS, 3000L);
     option(CURLOPT_TIMEOUT_MS, 8000L);
     option(CURLOPT_NOSIGNAL, 1L);
