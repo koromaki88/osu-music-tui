@@ -105,8 +105,8 @@ After those changes the user confirmed live authorization and Now Playing work.
 `make test` passes, including deterministic signature/form/metadata tests, private
 file safety tests, fake authorization/session restoration/revocation, ignored/failed
 Now Playing, cancellation, and TUI masking/cancel/resize/disable/restart tests. Tests
-do not contact Last.fm, launch osu!, or scan a real library. Live scrobble acceptance
-remains unverified; authorization/Now Playing were reported working by the user.
+do not contact Last.fm, launch osu!, or scan a real library. The user has confirmed
+live authorization, Now Playing, and scrobble submission working in the native build.
 The focused Last.fm ASan/UBSan suite also passes; its log is
 `artifacts/lastfm-sanitizer.log`. The complete native-suite log is `artifacts/tests.log`.
 
@@ -147,6 +147,25 @@ delivery after a lost server reply or a crash between acceptance and receipt fsy
 Retries preserve the original timestamp/metadata. A crash before mailbox persistence
 can lose recent eligibility events; no lost journal history is invented to compensate.
 No automatic expiry silently deletes queued plays; server filtering is reported.
+
+Private-file hardening uses a shared internal `lastfm_storage::Directory`: open the
+owner-only directory once with `O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC`, then use `openat`,
+`renameat`, and `unlinkat` relative to that descriptor. Atomic writes use random
+exclusive 0600 staging files, file fsync, and directory fsync, and verify the named
+directory still matches the held inode before commit. Private files and lock files
+must have one link, preventing hard-linked aliases; all owned descriptors are
+close-on-exec. This limits path-replacement attacks, not a malicious process with
+the same UID or root access. Credentials/history remain plaintext, not encrypted.
+
+Persisted retry deadlines are converted once per head/deadline to monotonic waits,
+clamped to at most 30 minutes on load; clock changes do not continually rebase them.
+The scheduler only copies a payload when selecting a submission, not on each wake.
+Outbox-load duplicate detection uses a bounded identity set instead of repeated
+linear scans and rejects duplicate receipts too. Invalid/oversized/non-integer API
+error codes and noncanonical ignored codes cannot become terminal receipts or revoke
+credentials. Tests exercise replaced directories/targets, hard links, descriptor
+flags, hostile error types/ranges, and extreme retry-clock arithmetic. No whole-player
+CPU profiling or claimed CPU/memory improvement is part of this hardening pass.
 
 `tests/lastfm_scrobble_test.cpp` covers timing/metadata gating, timestamp preservation,
 queue restart/FIFO/account isolation, exclusive locks, limits, malformed/newer files,

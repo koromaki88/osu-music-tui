@@ -328,6 +328,8 @@ Credentials are stored separately in
 0600 file. **They are not encrypted**; protect your account, backups, and terminal
 recordings. Unsafe, malformed, or newer credential files are preserved rather than
 overwritten. Only enablement is stored in ordinary preferences.
+Symlinks and hard-linked private files are refused; copy private files normally
+rather than sharing them through links.
 
 Requests use verified HTTPS on a background worker. Now Playing sends structured
 artist/title and audio duration when known, once per playback session; failed or
@@ -346,6 +348,8 @@ pending plays are sent before newer ones for that account, one request at a time
 Temporary API/network failures back off from 30 seconds up to 30 minutes between
 retries, including across restarts. Permanent API rejections and filtered/ignored
 plays are not retried. Revoked sessions pause delivery until reauthorization.
+Persisted retry deadlines are bounded and converted to monotonic waits, so a system
+clock rollback cannot keep extending the wait indefinitely.
 
 The `l` panel shows pending plays, unsaved-play warnings, and the latest scrobble
 result. A full or unsafe queue never silently discards old pending plays; new plays

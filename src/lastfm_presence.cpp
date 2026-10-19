@@ -56,8 +56,10 @@ Json response_json(const LastfmResponse& response)
     }
     if (!json_object_is_type(root.get(), json_type_object)) { throw LastfmFailure{LastfmFailureKind::response_format, 2}; }
     if (auto* error = field(root.get(), "error")) {
-        if (!json_object_is_type(error, json_type_int)) { throw LastfmFailure{LastfmFailureKind::response_format}; }
-        throw ApiError{json_object_get_int(error)};
+        if (!json_object_is_type(error, json_type_int) || json_object_get_int64(error) < 1 || json_object_get_int64(error) > 999) {
+            throw LastfmFailure{LastfmFailureKind::response_format};
+        }
+        throw ApiError{static_cast<int>(json_object_get_int64(error))};
     }
     if (response.http_status != 200) { throw LastfmFailure{LastfmFailureKind::http_status, static_cast<int>(response.http_status)}; }
     return root;
@@ -92,6 +94,10 @@ struct LastfmPresence::Impl {
     std::unique_ptr<LastfmQueue> queue;
     bool queue_fault{};
     Steady::time_point next_request{};
+    std::string retry_account;
+    std::string retry_session;
+    std::int64_t retry_wall_deadline{-1};
+    Steady::time_point retry_ready{};
     std::jthread worker; // Joins before shared members are destroyed.
 
     Impl(std::filesystem::path value, LastfmTransport sender, LastfmTiming delays)
@@ -130,6 +136,7 @@ struct LastfmPresence::Impl {
             // Re-read after any prior failed atomic write: rename may have
             // succeeded even if directory fsync failed afterward.
             queue.reset();
+            retry_account.clear(); retry_session.clear(); retry_wall_deadline = -1;
             queue = std::make_unique<LastfmQueue>(path.parent_path() / "scrobbles.json");
             queue_status({});
         } catch (const LastfmFailure& failure) {
@@ -251,7 +258,8 @@ struct LastfmPresence::Impl {
             const auto code = numeric_text(field(item, "ignoredMessage"), "code");
             const auto accepted = numeric_text(field(scrobbles, "@attr"), "accepted");
             const auto ignored = numeric_text(field(scrobbles, "@attr"), "ignored");
-            if (code.empty() || code.size() > 3 || !std::all_of(code.begin(), code.end(), [](char c) { return c >= '0' && c <= '9'; }) ||
+            if (code.empty() || code.size() > 3 || (code.size() > 1 && code.front() == '0') ||
+                !std::all_of(code.begin(), code.end(), [](char c) { return c >= '0' && c <= '9'; }) ||
                 numeric_text(item, "timestamp") != entry.parameters.at("timestamp") ||
                 (code == "0" ? accepted != "1" || ignored != "0" : accepted != "0" || ignored != "1")) {
                 throw LastfmFailure{LastfmFailureKind::response_format, 8};
@@ -310,11 +318,15 @@ struct LastfmPresence::Impl {
                         if (stop.stop_requested() || disconnect_pending || action != Action::none || !incoming.empty()) { break; }
                         const bool connected = enabled && state.phase == LastfmPhase::connected;
                         if (connected && playback && playback->playing && attempted_session != playback->session_id) { break; }
-                        auto front = connected && queue && !queue_fault ? queue->front(bound_account) : std::nullopt;
-                        if (front && front->retry_at_ms <= wall_ms() && Steady::now() >= next_request) { submission = std::move(front); break; }
+                        const auto* front = connected && queue && !queue_fault ? queue->peek(bound_account) : nullptr;
                         if (front) {
-                            const auto delay = std::chrono::milliseconds{std::max<std::int64_t>(0, front->retry_at_ms - wall_ms())};
-                            condition.wait_until(lock, std::max(next_request, Steady::now() + delay));
+                            if (retry_account != front->account || retry_session != front->session_id || retry_wall_deadline != front->retry_at_ms) {
+                                retry_account = front->account; retry_session = front->session_id; retry_wall_deadline = front->retry_at_ms;
+                                retry_ready = Steady::now() + lastfm_retry_delay(front->retry_at_ms, wall_ms());
+                            }
+                            const auto ready = std::max(next_request, retry_ready);
+                            if (Steady::now() >= ready) { submission = *front; break; }
+                            condition.wait_until(lock, ready);
                         } else { condition.wait(lock); }
                     }
                     if (stop.stop_requested()) {

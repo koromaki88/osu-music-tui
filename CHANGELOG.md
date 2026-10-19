@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Hardened Last.fm private-file operations with validated directory descriptors,
+  descriptor-relative atomic writes, hard-link rejection, and close-on-exec files.
+- Bounded retry waits across clock changes, rejected malformed numeric API errors,
+  removed repeated queue-head payload copies, and made outbox duplicate checks on
+  load linear on average (including duplicate receipt validation).
 - Hardened Last.fm scrobble replies against unrelated playback changes and made
   local disconnect survive immediate shutdown/re-enable. Added controller-to-fake-
   service coverage for pause/seek accounting, replay, and shutdown eligibility.

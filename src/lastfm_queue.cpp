@@ -1,4 +1,5 @@
 #include "osu_player/lastfm_queue.hpp"
+#include "lastfm_storage.hpp"
 
 #include <json-c/json.h>
 #include <fcntl.h>
@@ -11,12 +12,13 @@
 #include <cerrno>
 #include <memory>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace osu_player {
 namespace {
 using Json = std::unique_ptr<json_object, decltype(&json_object_put)>;
 constexpr std::size_t byte_limit = 8 * 1024 * 1024;
-struct File { int fd{-1}; ~File() { if (fd >= 0) { close(fd); } } };
+using lastfm_storage::File;
 [[noreturn]] void failure(const int code) { throw LastfmFailure{LastfmFailureKind::queue, code}; }
 bool identity(const std::string& value)
 {
@@ -69,6 +71,15 @@ std::string lastfm_account(std::string username)
     return username;
 }
 
+std::chrono::milliseconds lastfm_retry_delay(const std::int64_t deadline_ms, const std::int64_t now_ms) noexcept
+{
+    constexpr std::int64_t maximum = 30 * 60 * 1000;
+    // Compare before subtracting: even hostile extreme values must not overflow.
+    if (deadline_ms <= now_ms) { return std::chrono::milliseconds{0}; }
+    if (deadline_ms < 0 || now_ms < 0 || now_ms < deadline_ms - maximum) { return std::chrono::milliseconds{maximum}; }
+    return std::chrono::milliseconds{deadline_ms - now_ms};
+}
+
 std::optional<LastfmScrobble> lastfm_scrobble(const PlaybackSnapshot& playback, const std::string& account)
 {
     if (!playback.listening_eligible || !playback.duration || *playback.duration <= std::chrono::seconds{30} ||
@@ -90,12 +101,13 @@ LastfmQueue::LastfmQueue(std::filesystem::path path) : path_{std::move(path)}
     struct stat directory{};
     if (lstat(path_.parent_path().c_str(), &directory) != 0 || !S_ISDIR(directory.st_mode) ||
         directory.st_uid != getuid() || (directory.st_mode & 077) != 0) { failure(2); }
-    File lock{open((path_.string() + ".lock").c_str(), O_RDWR | O_CREAT | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600)};
+    directory_ = std::make_unique<lastfm_storage::Directory>(path_.parent_path(), true);
+    auto lock = directory_->open_file(path_.filename().string() + ".lock", O_RDWR | O_CREAT);
     struct stat info{};
     if (lock.fd < 0 || fstat(lock.fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_uid != getuid() ||
         (info.st_mode & 077) != 0) { failure(2); }
     if (flock(lock.fd, LOCK_EX | LOCK_NB) != 0) { failure(3); }
-    File file{open(path_.c_str(), O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)};
+    auto file = directory_->open_file(path_.filename().string(), O_RDONLY, true);
     if (file.fd < 0 && errno != ENOENT) { failure(2); }
     if (file.fd >= 0) {
         if (fstat(file.fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_uid != getuid() ||
@@ -118,6 +130,8 @@ LastfmQueue::LastfmQueue(std::filesystem::path path) : path_{std::move(path)}
         auto* pending = field(root.get(), "pending"); auto* finished = field(root.get(), "receipts");
         if (!json_object_is_type(pending, json_type_array) || !json_object_is_type(finished, json_type_array) ||
             json_object_array_length(pending) > entry_limit || json_object_array_length(finished) > receipt_limit) { failure(1); }
+        std::unordered_set<std::string> identities;
+        identities.reserve(json_object_array_length(pending) + json_object_array_length(finished));
         for (std::size_t index = 0; index < json_object_array_length(pending); ++index) {
             auto* item = json_object_array_get_idx(pending, index);
             const auto attempts = number(item, "failures");
@@ -125,14 +139,14 @@ LastfmQueue::LastfmQueue(std::filesystem::path path) : path_{std::move(path)}
             LastfmScrobble entry{text(item, "account"), text(item, "session"), {}, static_cast<unsigned int>(attempts), number(item, "retry_at_ms")};
             for (const auto* name : {"method", "artist", "track", "duration", "timestamp"}) { entry.parameters[name] = text(item, name); }
             validate(entry);
-            if (std::any_of(entries_.begin(), entries_.end(), [&](const auto& old) { return old.account == entry.account && old.session_id == entry.session_id; })) { failure(1); }
+            if (!identities.insert(entry.account + '\n' + entry.session_id).second) { failure(1); }
             entries_.push_back(std::move(entry));
         }
         for (std::size_t index = 0; index < json_object_array_length(finished); ++index) {
             auto* item = json_object_array_get_idx(finished, index);
             Receipt receipt{text(item, "account"), text(item, "session")};
             if (!identity(receipt.account) || lastfm_account(receipt.account) != receipt.account || !identity(receipt.session_id)) { failure(1); }
-            if (std::any_of(entries_.begin(), entries_.end(), [&](const auto& old) { return old.account == receipt.account && old.session_id == receipt.session_id; })) { failure(1); }
+            if (!identities.insert(receipt.account + '\n' + receipt.session_id).second) { failure(1); }
             receipts_.push_back(std::move(receipt));
         }
     }
@@ -160,22 +174,7 @@ void LastfmQueue::save(const std::vector<LastfmScrobble>& entries, const std::de
     }
     const std::string content = json_object_to_json_string_ext(root.get(), JSON_C_TO_STRING_PLAIN);
     if (content.size() > byte_limit) { failure(4); }
-    auto pattern = (path_.parent_path() / ".scrobbles-XXXXXX").string();
-    std::vector<char> staging(pattern.begin(), pattern.end()); staging.push_back('\0');
-    File file{mkstemp(staging.data())};
-    if (file.fd < 0) { failure(2); }
-    try {
-        std::size_t offset{};
-        while (offset < content.size()) {
-            const auto bytes = write(file.fd, content.data() + offset, content.size() - offset);
-            if (bytes < 0 && errno == EINTR) { continue; }
-            if (bytes <= 0) { failure(2); }
-            offset += static_cast<std::size_t>(bytes);
-        }
-        if (fsync(file.fd) != 0 || rename(staging.data(), path_.c_str()) != 0) { failure(2); }
-        File directory{open(path_.parent_path().c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
-        if (directory.fd < 0 || fsync(directory.fd) != 0) { failure(2); }
-    } catch (...) { unlink(staging.data()); throw; }
+    directory_->atomic_write(path_.filename().string(), content);
 }
 
 bool LastfmQueue::enqueue(const LastfmScrobble& entry)
@@ -189,8 +188,13 @@ bool LastfmQueue::enqueue(const LastfmScrobble& entry)
 
 std::optional<LastfmScrobble> LastfmQueue::front(const std::string& account) const
 {
+    const auto* found = peek(account);
+    return found ? std::optional{*found} : std::nullopt;
+}
+const LastfmScrobble* LastfmQueue::peek(const std::string& account) const noexcept
+{
     const auto found = std::find_if(entries_.begin(), entries_.end(), [&](const auto& entry) { return entry.account == account; });
-    return found == entries_.end() ? std::nullopt : std::optional{*found};
+    return found == entries_.end() ? nullptr : &*found;
 }
 void LastfmQueue::finish(const LastfmScrobble& entry)
 {

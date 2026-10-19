@@ -43,7 +43,7 @@ all: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-te
 RELEASE_SOURCES := $(wildcard src/*.cpp)
 release: $(RELEASE_DIR)/osu-player
 
-$(RELEASE_DIR)/osu-player: $(RELEASE_SOURCES) $(wildcard include/osu_player/*.hpp) Makefile
+$(RELEASE_DIR)/osu-player: $(RELEASE_SOURCES) $(wildcard include/osu_player/*.hpp src/*.hpp) Makefile
 	@mkdir -p "$(@D)"
 	$(CXX) $(CPPFLAGS) -std=c++20 $(RELEASE_CXXFLAGS) -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -pthread $(RELEASE_SOURCES) $(LDFLAGS) $(LDLIBS) -o "$@"
 

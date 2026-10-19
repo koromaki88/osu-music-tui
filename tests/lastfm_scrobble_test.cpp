@@ -2,6 +2,7 @@
 #include "osu_player/lastfm_queue.hpp"
 #include "osu_player/player_controller.hpp"
 #include "fake_audio_player.hpp"
+#include "../src/lastfm_storage.hpp"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -11,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -82,6 +84,7 @@ struct Fake {
     std::atomic<bool> array_ack{};
     std::atomic<bool> hold_reply{};
     std::atomic<bool> release_reply{};
+    std::string response_override; // Immutable after starting a worker.
     LastfmResponse send(const LastfmParameters& params, const LastfmCancelled& cancel)
     {
         { const std::lock_guard lock{mutex}; calls.push_back(params); }
@@ -91,6 +94,7 @@ struct Fake {
         }
         check(params.at("method") == "track.scrobble", "only scrobble or Now Playing requests expected");
         check(params.size() == 9 && !params.contains("album") && !params.contains("chosenByUser"), "no invented album or local identifiers");
+        if (!response_override.empty()) { return {200, response_override}; }
         if (blocked) {
             until([&] { return cancel(); }); cancelled = true;
             throw std::runtime_error{"DO NOT LOG SECRET"};
@@ -420,11 +424,95 @@ void controller_delivery_test()
     check(service.scrobbles()[0].at("artist") == "Controller artist" &&
           service.scrobbles()[1].at("track") == "Controller 日本 title", "new-session shutdown eligibility reaches fake Last.fm without metadata guessing");
 }
+void storage_hardening_tests()
+{
+    Temporary temporary;
+    const auto original = contents(temporary.path());
+    const auto alias = temporary.root / "credential-alias";
+    std::filesystem::create_hard_link(temporary.path(), alias);
+    rejects([&] { (void)load_lastfm_credentials(temporary.path()); }, "hard-linked credentials refused");
+    rejects([&] { save_lastfm_credentials(temporary.path(), credentials()); }, "hard-linked credentials never overwritten");
+    check(contents(alias) == original, "credential hard-link target unchanged");
+    std::filesystem::remove(alias);
+    {
+        lastfm_storage::Directory directory{temporary.path().parent_path(), false};
+        auto file = directory.open_file("credentials.json", O_RDONLY);
+        check((fcntl(file.fd, F_GETFD) & FD_CLOEXEC) != 0, "private descriptors cannot leak into executed child programs");
+    }
+    const auto entry = *lastfm_scrobble(eligible(), "test-user");
+    {
+        LastfmQueue queue{temporary.queue()};
+        const auto target = temporary.root / "untouched";
+        { std::ofstream file{target}; file << "preserve me"; }
+        std::filesystem::create_symlink(target, temporary.queue());
+        rejects([&] { queue.enqueue(entry); }, "outbox target replaced with symlink is refused before writing");
+        check(contents(target) == "preserve me" && queue.size("test-user") == 0, "failed save cannot alter target or in-memory queue");
+        std::filesystem::remove(temporary.queue());
+    }
+    const auto lock = std::filesystem::path{temporary.queue().string() + ".lock"};
+    std::filesystem::create_hard_link(lock, alias);
+    rejects([&] { LastfmQueue queue{temporary.queue()}; }, "hard-linked outbox lock refused");
+    std::filesystem::remove(alias);
+    {
+        LastfmQueue queue{temporary.queue()}; queue.enqueue(entry);
+    }
+    std::filesystem::create_hard_link(temporary.queue(), alias);
+    rejects([&] { LastfmQueue queue{temporary.queue()}; }, "hard-linked outbox data refused");
+    std::filesystem::remove(alias);
+    for (bool symlink : {false, true}) {
+        Temporary replacement;
+        LastfmQueue queue{replacement.queue()};
+        const auto parent = replacement.path().parent_path();
+        std::filesystem::rename(parent, replacement.root / "original-private-directory");
+        const auto destination = replacement.root / "destination";
+        std::filesystem::create_directory(destination);
+        if (symlink) { std::filesystem::create_directory_symlink(destination, parent); }
+        else { std::filesystem::create_directory(parent); std::filesystem::permissions(parent, std::filesystem::perms::owner_all); }
+        rejects([&] { queue.enqueue(entry); }, "directory replacement cannot redirect live outbox writes");
+        check(!std::filesystem::exists(destination / "scrobbles.json") && !std::filesystem::exists(parent / "scrobbles.json"), "replacement directory receives no private outbox content");
+        check(queue.size("test-user") == 0, "directory replacement does not commit unsaved entry");
+    }
+}
+void hostile_response_tests()
+{
+    for (const auto* code : {"0", "-1", "4294967305", "\"9\"", "true", "9.0"}) {
+        Temporary temporary; Fake fake;
+        fake.response_override = "{\"error\":" + std::string{code} + ",\"message\":\"DO NOT LOG SECRET\"}";
+        LastfmPresence presence{temporary.path(), fake.transport(), LastfmTiming{1ms, 1000ms}};
+        connected(presence); presence.publish(events(eligible()), std::nullopt);
+        until([&] { return presence.status().scrobble_status.starts_with("Scrobble cached;"); });
+        check(presence.status().pending == 1 && fake.count() == 1 && !load_lastfm_credentials(temporary.path()).session_key.empty(), "malformed API codes cannot consume outbox entry or revoke valid session");
+        check(presence.status().scrobble_status.find("DO NOT LOG") == std::string::npos, "malformed server error text remains redacted");
+    }
+    {
+        Temporary temporary; Fake fake;
+        const auto value = eligible(); const auto entry = *lastfm_scrobble(value, "test-user");
+        fake.response_override = "{\"scrobbles\":{\"@attr\":{\"accepted\":0,\"ignored\":1},\"scrobble\":{\"timestamp\":\"" +
+            entry.parameters.at("timestamp") + "\",\"ignoredMessage\":{\"code\":\"00\"}}}}";
+        LastfmPresence presence{temporary.path(), fake.transport(), LastfmTiming{1ms, 1000ms}};
+        connected(presence); presence.publish(events(value), std::nullopt);
+        until([&] { return presence.status().scrobble_status.starts_with("Scrobble cached;"); });
+        check(presence.status().pending == 1, "noncanonical ignored code cannot consume a pending entry");
+    }
+    {
+        Temporary temporary;
+        const std::string duplicated = "{\"version\":1,\"pending\":[],\"receipts\":[{\"account\":\"test-user\",\"session\":\"id\"},{\"account\":\"test-user\",\"session\":\"id\"}]}";
+        { std::ofstream file{temporary.queue()}; file << duplicated; }
+        chmod(temporary.queue().c_str(), 0600);
+        rejects([&] { LastfmQueue queue{temporary.queue()}; }, "duplicate receipt identities rejected during outbox load");
+        check(contents(temporary.queue()) == duplicated, "malformed receipt file is preserved");
+    }
+    check(lastfm_retry_delay(1000, 1000) == 0ms && lastfm_retry_delay(500, 1000) == 0ms &&
+          lastfm_retry_delay(1500, 1000) == 500ms, "ordinary persisted retry delays preserved");
+    check(lastfm_retry_delay(4102444800000LL, 0) == 30min &&
+          lastfm_retry_delay(std::numeric_limits<std::int64_t>::max(), std::numeric_limits<std::int64_t>::min()) == 30min,
+          "future/rollback/extreme retry clocks bounded without signed overflow");
+}
 }  // namespace
 int main()
 {
     try {
-        eligibility_tests(); queue_tests(); capacity_tests(); delivery_tests(); retry_restart_tests(); live_retry_tests(); account_and_revocation_tests(); shutdown_and_safety_tests(); concurrent_control_tests(); controller_delivery_test();
+        eligibility_tests(); queue_tests(); capacity_tests(); delivery_tests(); retry_restart_tests(); live_retry_tests(); account_and_revocation_tests(); shutdown_and_safety_tests(); concurrent_control_tests(); controller_delivery_test(); storage_hardening_tests(); hostile_response_tests();
         std::cout << "Last.fm scrobble eligibility, private durable queue, fake submission/retries, account isolation and shutdown tests passed (no network)\n";
         return 0;
     } catch (const std::exception& error) { std::cerr << "Last.fm scrobble test failure: " << error.what() << '\n'; return 1; }

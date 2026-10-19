@@ -1,5 +1,6 @@
 #include "osu_player/lastfm_client.hpp"
 #include "osu_player/settings.hpp"
+#include "lastfm_storage.hpp"
 
 #include <curl/curl.h>
 #include <json-c/json.h>
@@ -13,15 +14,10 @@
 #include <memory>
 #include <stdexcept>
 #include <string_view>
-#include <vector>
 
 namespace osu_player {
 namespace {
 using Json = std::unique_ptr<json_object, decltype(&json_object_put)>;
-struct File {
-    int fd{-1};
-    ~File() { if (fd >= 0) { close(fd); } }
-};
 [[noreturn]] void invalid() { throw LastfmFailure{LastfmFailureKind::credential_format}; }
 [[noreturn]] void io_failure() { throw LastfmFailure{LastfmFailureKind::credential_io, errno}; }
 [[noreturn]] void unsafe() { throw LastfmFailure{LastfmFailureKind::credential_permissions}; }
@@ -89,7 +85,7 @@ std::string lastfm_failure_message(const LastfmFailure& failure)
 {
     switch (failure.kind) {
         case LastfmFailureKind::credential_format: return "Credentials: malformed/unsupported file; preserved";
-        case LastfmFailureKind::credential_permissions: return "Credentials: unsafe owner/type/mode (directory 0700, file 0600)";
+        case LastfmFailureKind::credential_permissions: return "Credentials: unsafe owner/type/mode/link (directory 0700, file 0600)";
         case LastfmFailureKind::credential_io: return "Credentials: file I/O failed (errno " + std::to_string(failure.code) + ")";
         case LastfmFailureKind::signing: return "Signing: OpenSSL MD5 unavailable/failed";
         case LastfmFailureKind::https_setup: return "HTTPS: libcurl setup failed (code " + std::to_string(failure.code) + ")";
@@ -148,11 +144,9 @@ LastfmCredentials load_lastfm_credentials(const std::filesystem::path& path)
         io_failure();
     }
     if (!S_ISDIR(parent.st_mode) || parent.st_uid != getuid() || (parent.st_mode & 077) != 0) { unsafe(); }
-    File file{open(path.c_str(), O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC)};
-    if (file.fd < 0) {
-        if (errno == ENOENT) { return {}; }
-        io_failure();
-    }
+    lastfm_storage::Directory directory{path.parent_path(), false};
+    auto file = directory.open_file(path.filename().string(), O_RDONLY, true);
+    if (file.fd < 0) { return {}; }
     struct stat info{};
     if (fstat(file.fd, &info) != 0) { io_failure(); }
     if (!S_ISREG(info.st_mode) || info.st_uid != getuid() || (info.st_mode & 077) != 0) { unsafe(); }
@@ -201,23 +195,8 @@ void save_lastfm_credentials(const std::filesystem::path& path, const LastfmCred
         json_object_object_add(root.get(), name, json_object_new_string(field->c_str()));
     }
     const std::string text = json_object_to_json_string_ext(root.get(), JSON_C_TO_STRING_PLAIN);
-    const auto pattern = (path.parent_path() / ".credentials-XXXXXX").string();
-    std::vector<char> staging(pattern.begin(), pattern.end()); staging.push_back('\0');
-    File file{mkstemp(staging.data())};
-    if (file.fd < 0) { io_failure(); }
-    try {
-        std::size_t offset{};
-        while (offset < text.size()) {
-            const auto count = write(file.fd, text.data() + offset, text.size() - offset);
-            if (count < 0 && errno == EINTR) { continue; }
-            if (count <= 0) { io_failure(); }
-            offset += static_cast<std::size_t>(count);
-        }
-        if (fsync(file.fd) != 0) { io_failure(); }
-        if (rename(staging.data(), path.c_str()) != 0) { io_failure(); }
-        File directory{open(path.parent_path().c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)};
-        if (directory.fd < 0 || fsync(directory.fd) != 0) { io_failure(); }
-    } catch (...) { unlink(staging.data()); throw; }
+    lastfm_storage::Directory directory{path.parent_path(), false};
+    directory.atomic_write(path.filename().string(), text);
 }
 
 std::string lastfm_signature(const LastfmParameters& parameters, const std::string& secret)
