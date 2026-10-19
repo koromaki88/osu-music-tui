@@ -391,9 +391,27 @@ immediately; disable/exit attempts a bounded best-effort clear
 and closes the socket. An in-flight request is interruptible at short poll intervals;
 destruction joins the worker. Abrupt process termination cannot guarantee a clear.
 
+For positive online beatmapset IDs, `assets.large_image` is the fixed HTTPS URL
+`https://assets.ppy.sh/beatmaps/{id}/covers/list@2x.jpg`; `small_image` retains the
+optional `osu_player` application asset. Missing/nonpositive IDs use `osu_player`
+as the large image with no overlay or beatmap link. The cover's `large_text` is fixed
+to `osu! player` rather than repeating combined artist/song metadata.
+Activity `name` uses the sanitized Unicode-preferred song title instead of the default
+application name. Activity `state` retains the artist (prefixed with `Paused —` when paused). The
+separate `details` song-title line is also omitted to avoid redundant text.
+Art changes follow the existing coalescing/throttling and metadata-change detection,
+including while paused. Only the numeric online ID is
+used to build the URL; local paths and arbitrary URLs never enter the payload.
+Discord fetches/proxies the image, so this adds no player HTTP client, API credentials,
+image cache/decoder, extra thread, or polling. There is no remote-availability probe or
+automatic fallback for deleted/unreachable covers; Discord controls display/caching.
+References: [Discord activity asset images](https://docs.discord.com/developers/events/gateway-events#activity-object-activity-asset-image)
+and osu-web's `Beatmapset::coverPath` / `coverURL` / `coverSizes`.
+
 `tests/discord_presence_test.cpp` checks pure rendering and provides a line-controlled
 worker harness. `tests/discord_integration.py` drives isolated fake sockets and a PTY,
-covering opt-in/invalid IDs, Unicode/privacy, ping/pong, fragmented/malformed/oversized
+covering opt-in/invalid IDs, Unicode/privacy, dynamic thumbnail changes and local-art
+fallback, ping/pong, fragmented/malformed/oversized
 frames, ACK/READY timeouts, reconnect, pause/seek/stop, normal shutdown, saved toggles,
 malformed config preservation, Application ID setup/validation/cancellation/restarts
 and uninterrupted playback while editing, and a `/proc`-based idle-worker

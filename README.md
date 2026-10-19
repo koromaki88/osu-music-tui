@@ -280,8 +280,17 @@ The Application ID and toggle are saved under `discord.application_id` and
 presence. Optionally upload a Rich Presence image named `osu_player` to your Discord
 application. No project-wide application ID is bundled yet.
 
-Presence shares the title, artist, playback timer, paused state, and an official beatmap
-link when available. Local paths, hashes, and library/session IDs are not sent.
+Presence uses the song title as its activity heading instead of the default application
+name, followed by the artist (prefixed with `Paused` when paused), playback timer,
+and an official beatmap link when available. The extra song-title line is omitted;
+the cover label reads `osu! player` rather than repeating artist/song metadata.
+Tracks with a positive online
+beatmapset ID show the public osu!
+thumbnail, with the `osu_player` image as a small overlay if you uploaded that asset.
+Tracks without an online ID use the player image instead. Discord fetches/proxies the
+thumbnail from `assets.ppy.sh`; the player does not download, decode, or upload images.
+Deleted/unavailable covers may not display, and local-only backgrounds are not shared.
+Local paths, hashes, and library/session IDs are not sent.
 Updates run in a background local IPC worker, coalesced to at most one normal update
 per five seconds; stopping clears activity promptly. Disabling or exiting attempts to
 clear presence before disconnecting. Connection failures do not stop playback.

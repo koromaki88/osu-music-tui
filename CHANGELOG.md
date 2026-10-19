@@ -11,6 +11,11 @@
   state/socket notifications now wake the worker only when needed.
 - Added an in-app Discord Application ID prompt when enabling without a valid saved
   ID, with validation, cancellation, and automatic persistence; playback continues.
+- Discord presence now uses dynamic public osu! beatmap thumbnails for tracks with
+  an online set ID, with the player asset as a small overlay; local tracks keep the
+  player image. Discord fetches images without player downloads or extra polling.
+- Discord presence uses the song title as its activity name and keeps the artist line,
+  omitting the extra song-title line; the bottom cover label reads `osu! player`.
 - Replaced the application icon's self-intersecting note with a centered eighth note.
 
 ## 0.2.0

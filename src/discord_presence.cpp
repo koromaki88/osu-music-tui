@@ -225,12 +225,22 @@ std::string discord_activity_json(const std::optional<PlaybackSnapshot>& playbac
     const auto state = display_text((playback->playing ? "" : "Paused — ") + artist, "Paused");
     Json activity{json_object_new_object(), json_object_put};
     json_object_object_add(activity.get(), "type", json_object_new_int(2)); // Listening
-    json_object_object_add(activity.get(), "details", json_object_new_string(title.c_str()));
+    json_object_object_add(activity.get(), "name", json_object_new_string(title.c_str()));
     json_object_object_add(activity.get(), "state", json_object_new_string(state.c_str()));
     auto* assets = json_object_new_object();
     json_object_object_add(activity.get(), "assets", assets);
-    json_object_object_add(assets, "large_image", json_object_new_string("osu_player"));
-    json_object_object_add(assets, "large_text", json_object_new_string("osu! music player"));
+    json_object_object_add(assets, "large_text", json_object_new_string("osu! player"));
+    const bool online = track.online_set_id && *track.online_set_id > 0;
+    if (online) {
+        // Discord fetches/proxies the public thumbnail. Never upload local art,
+        // fetch images on the player thread, or accept arbitrary metadata URLs.
+        const auto cover = "https://assets.ppy.sh/beatmaps/" + std::to_string(*track.online_set_id) + "/covers/list@2x.jpg";
+        json_object_object_add(assets, "large_image", json_object_new_string(cover.c_str()));
+        json_object_object_add(assets, "small_image", json_object_new_string("osu_player"));
+        json_object_object_add(assets, "small_text", json_object_new_string("osu! music player"));
+    } else {
+        json_object_object_add(assets, "large_image", json_object_new_string("osu_player"));
+    }
     using namespace std::chrono_literals;
     if (playback->playing && playback->position >= 0ms && playback->position <= 7 * 24h) {
         const auto position = playback->duration ? std::min(playback->position, *playback->duration) : playback->position;
@@ -246,7 +256,7 @@ std::string discord_activity_json(const std::optional<PlaybackSnapshot>& playbac
             }
         }
     }
-    if (track.online_set_id && *track.online_set_id > 0) {
+    if (online) {
         auto* buttons = json_object_new_array();
         auto* button = json_object_new_object();
         json_object_object_add(activity.get(), "buttons", buttons);

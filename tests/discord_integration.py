@@ -160,8 +160,13 @@ def worker_tests(binary, root):
             assert activity(client) is None
             driver.command("play")
             playing = activity(client)
-            assert playing["type"] == 2 and playing["details"] == "日本語" and "timestamps" in playing
+            assert playing["type"] == 2 and playing["state"] == "作曲家" and "timestamps" in playing
+            assert "details" not in playing
+            assert playing["name"] == "日本語"
             assert playing["buttons"][0]["url"] == "https://osu.ppy.sh/beatmapsets/123"
+            assert playing["assets"]["large_image"] == "https://assets.ppy.sh/beatmaps/123/covers/list@2x.jpg"
+            assert playing["assets"]["small_image"] == "osu_player"
+            assert playing["assets"]["large_text"] == "osu! player"
             for _ in range(30):
                 driver.command("progress")
             no_frame(client, 0.25)  # Progress does not turn into periodic SET_ACTIVITY spam.
@@ -184,7 +189,25 @@ def worker_tests(binary, root):
             coalesced = activity(client)
             assert abs(coalesced["timestamps"]["start"] - (time.time() - 53)) < 2, "throttled send must use the newest scalar position"
             driver.command("overflow")
-            assert activity(client)["details"] == "日本語"
+            assert activity(client)["state"] == "作曲家"
+            # Metadata replacement alone must update art, including while paused.
+            driver.command("pause")
+            assert "timestamps" not in activity(client)
+            driver.command("map-change")
+            changed = activity(client)
+            assert changed["assets"]["large_image"] == "https://assets.ppy.sh/beatmaps/456/covers/list@2x.jpg"
+            assert changed["buttons"][0]["url"].endswith("/456")
+            assert changed["state"].startswith("Paused")
+            driver.command("title-change")
+            renamed = activity(client)
+            assert renamed["name"] == "別の曲" and renamed["state"] == "Paused — 作曲家"
+            assert "details" not in renamed and renamed["assets"]["large_text"] == "osu! player"
+            driver.command("local-map")
+            local = activity(client)
+            assert local["assets"]["large_image"] == "osu_player"
+            assert "small_image" not in local["assets"] and "buttons" not in local
+            driver.command("play")
+            assert activity(client)["assets"]["large_image"].endswith("/123/covers/list@2x.jpg")
             driver.command("stop")
             assert activity(client) is None
             driver.command("disable")
@@ -195,7 +218,7 @@ def worker_tests(binary, root):
         driver.command("play")
         driver.command("enable")
         with server.accept() as client:
-            assert activity(client)["details"] == "日本語", "re-enable must restore latest state"
+            assert activity(client)["state"] == "作曲家", "re-enable must restore latest state"
         # Peer disconnect should reconnect and publish only the newest state.
         driver.command("pause")
         with server.accept() as client:
@@ -235,7 +258,7 @@ def worker_tests(binary, root):
                 # Do not ACK: the worker eventually closes instead of queueing indefinitely.
                 frame(client)  # Best-effort clear after timeout.
             with server.accept() as client:
-                assert activity(client)["details"] == "日本語"
+                assert activity(client)["state"] == "作曲家"
                 driver.command("disable")
     path.unlink()
 
@@ -245,11 +268,16 @@ def worker_tests(binary, root):
             driver.command("play")
             driver.command("enable")
             client = server.accept()
-            assert activity(client)["details"] == "日本語"
+            assert activity(client)["state"] == "作曲家"
         with client:
             opcode, body = frame(client)
             assert opcode == 1 and json.loads(body)["args"]["activity"] is None
-            assert client.recv(1) == b""
+            try:
+                assert client.recv(1) == b""
+            except ConnectionResetError:
+                # Shutdown can cancel ACK consumption; closing a Unix socket
+                # with that unread ACK may reset rather than deliver EOF.
+                pass
     path.unlink()
 
 
@@ -278,7 +306,8 @@ def tui_tests(binary, root):
                 session.send("\n")
                 session.expect("State: playing")
                 client.settimeout(7)  # Production updates are throttled to five seconds.
-                assert activity(client)["details"] == "Title"
+                current = activity(client)
+                assert current["state"] == "Artist" and current["name"] == "Title"
                 session.send("d")
                 session.expect("Discord: off", "State: playing")
                 opcode, body = frame(client)
@@ -330,7 +359,8 @@ def tui_tests(binary, root):
             no_connection(server)
             session.send("\n")
             with server.accept() as client:
-                assert activity(client)["details"] == "Title"
+                current = activity(client)
+                assert current["state"] == "Artist" and current["name"] == "Title"
                 session.expect("Discord: connected", "Search: Title", "State: playing")
                 assert "Discord Application ID:" not in session.screen.text()
                 saved = json.loads(config.read_text())
