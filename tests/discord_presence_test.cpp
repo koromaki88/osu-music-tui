@@ -57,7 +57,7 @@ void unit_tests()
     auto* assets = field(activity.get(), "assets");
     check(std::string{json_object_get_string(field(assets, "large_image"))} ==
           "https://assets.ppy.sh/beatmaps/123/covers/list@2x.jpg", "online track uses official public thumbnail");
-    check(std::string{json_object_get_string(field(assets, "large_text"))} == "osu! player", "bottom cover label identifies the player, not artist/song");
+    check(std::string{json_object_get_string(field(assets, "large_text"))} == "osu! music player", "bottom cover label identifies the player, not artist/song");
     check(std::string{json_object_get_string(field(assets, "small_image"))} == "osu_player", "player icon remains as overlay");
     auto* timestamps = field(activity.get(), "timestamps");
     check(json_object_get_int64(field(timestamps, "start")) == 988 && json_object_get_int64(field(timestamps, "end")) == 1108,
@@ -95,7 +95,7 @@ void unit_tests()
     check(limited && !field(limited.get(), "details"), "no separate song-title line");
     check(json_object_get_string_len(field(limited.get(), "name")) == 126, "song heading clips UTF-8 at codepoint boundaries");
     check(std::string{json_object_get_string(field(limited.get(), "state"))} == "Unknown artist", "controls are not exported");
-    check(std::string{json_object_get_string(field(field(limited.get(), "assets"), "large_text"))} == "osu! player",
+    check(std::string{json_object_get_string(field(field(limited.get(), "assets"), "large_text"))} == "osu! music player",
           "cover label remains fixed regardless of track metadata");
     playback.position = std::chrono::milliseconds::max();
     check(discord_activity_json(playback, time).find("timestamps") == std::string::npos, "invalid huge positions cannot overflow timestamps");

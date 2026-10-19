@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Changed the Discord cover label from `osu! player` to `osu! music player`.
+
 ## 0.3.0
 
 - Added the shared playback-event and listening-time foundation for future Discord

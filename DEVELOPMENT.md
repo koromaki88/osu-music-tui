@@ -425,7 +425,7 @@ For positive online beatmapset IDs, `assets.large_image` is the fixed HTTPS URL
 `https://assets.ppy.sh/beatmaps/{id}/covers/list@2x.jpg`; `small_image` retains the
 optional `osu_player` application asset. Missing/nonpositive IDs use `osu_player`
 as the large image with no overlay or beatmap link. The cover's `large_text` is fixed
-to `osu! player` rather than repeating combined artist/song metadata.
+to `osu! music player` rather than repeating combined artist/song metadata.
 Activity `name` uses the sanitized Unicode-preferred song title instead of the default
 application name. Activity `state` retains the artist (prefixed with `Paused —` when paused). The
 separate `details` song-title line is also omitted to avoid redundant text.

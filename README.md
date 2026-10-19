@@ -283,7 +283,7 @@ application. No project-wide application ID is bundled yet.
 Presence uses the song title as its activity heading instead of the default application
 name, followed by the artist (prefixed with `Paused` when paused), playback timer,
 and an official beatmap link when available. The extra song-title line is omitted;
-the cover label reads `osu! player` rather than repeating artist/song metadata.
+the cover label reads `osu! music player` rather than repeating artist/song metadata.
 Tracks with a positive online
 beatmapset ID show the public osu!
 thumbnail, with the `osu_player` image as a small overlay if you uploaded that asset.

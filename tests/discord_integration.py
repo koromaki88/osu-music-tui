@@ -166,7 +166,7 @@ def worker_tests(binary, root):
             assert playing["buttons"][0]["url"] == "https://osu.ppy.sh/beatmapsets/123"
             assert playing["assets"]["large_image"] == "https://assets.ppy.sh/beatmaps/123/covers/list@2x.jpg"
             assert playing["assets"]["small_image"] == "osu_player"
-            assert playing["assets"]["large_text"] == "osu! player"
+            assert playing["assets"]["large_text"] == "osu! music player"
             for _ in range(30):
                 driver.command("progress")
             no_frame(client, 0.25)  # Progress does not turn into periodic SET_ACTIVITY spam.
@@ -201,7 +201,7 @@ def worker_tests(binary, root):
             driver.command("title-change")
             renamed = activity(client)
             assert renamed["name"] == "別の曲" and renamed["state"] == "Paused — 作曲家"
-            assert "details" not in renamed and renamed["assets"]["large_text"] == "osu! player"
+            assert "details" not in renamed and renamed["assets"]["large_text"] == "osu! music player"
             driver.command("local-map")
             local = activity(client)
             assert local["assets"]["large_image"] == "osu_player"

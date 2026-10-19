@@ -229,7 +229,7 @@ std::string discord_activity_json(const std::optional<PlaybackSnapshot>& playbac
     json_object_object_add(activity.get(), "state", json_object_new_string(state.c_str()));
     auto* assets = json_object_new_object();
     json_object_object_add(activity.get(), "assets", assets);
-    json_object_object_add(assets, "large_text", json_object_new_string("osu! player"));
+    json_object_object_add(assets, "large_text", json_object_new_string("osu! music player"));
     const bool online = track.online_set_id && *track.online_set_id > 0;
     if (online) {
         // Discord fetches/proxies the public thumbnail. Never upload local art,
