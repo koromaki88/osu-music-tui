@@ -295,15 +295,68 @@ def tui_tests(binary, root):
             session.finish()
     path.unlink()
 
-    # Invalid/missing IDs stay local; a keyboard toggle still persists its value.
+    # Missing IDs prompt without connecting or mutating settings until accepted.
     config.write_text('{"version":1}')
-    with Session(binary, library, **environment) as session:
-        session.expect("Discord: off", "Library: 1")
-        session.send("d")
-        session.expect("Discord: needs app ID")
-        assert json.loads(config.read_text())["discord"]["enabled"]
-        session.send("q")
-        session.finish()
+    with Server(path) as server:
+        with Session(binary, library, **environment) as session:
+            session.expect("Discord: off", "Library: 1")
+            session.send("/Title\n\n")
+            session.expect("State: playing", "Search: Title")
+            session.send("d")
+            session.expect("Discord Application ID:", "Enter save & enable", "developers/applications")
+            no_connection(server)
+            session.send("\n")
+            session.expect("Invalid Application ID")
+            session.send("bad-id\n")
+            session.expect("Invalid Application ID", "Discord Application ID: bad-id")
+            session.resize(10, 45)
+            session.expect("Terminal too small", "Esc cancels setup")
+            session.resize(24, 100)
+            session.expect("Discord Application ID: bad-id", "State: playing")
+            no_connection(server)
+            assert config.read_text() and not json.loads(config.read_text())["discord"]["enabled"]
+            session.send("\x1b")
+            session.expect("Search: Title", "Discord: off")
+            assert "Discord Application ID:" not in session.screen.text()
+            session.send("d")
+            session.expect("Discord Application ID: _")
+            # Overflow is rejected even if it has the right number of digits.
+            session.send("18446744073709551616\n")
+            session.expect("Invalid Application ID")
+            # Ctrl-U clears; Backspace edits without affecting search/transport.
+            session.send("\x15123456789012345679\x7f8")
+            session.expect("Discord Application ID: 123456789012345678_")
+            session.expect("State: playing", "00:01")
+            no_connection(server)
+            session.send("\n")
+            with server.accept() as client:
+                assert activity(client)["details"] == "Title"
+                session.expect("Discord: connected", "Search: Title", "State: playing")
+                assert "Discord Application ID:" not in session.screen.text()
+                saved = json.loads(config.read_text())
+                assert saved["discord"] == {"enabled": True, "application_id": "123456789012345678"}
+                assert saved["search"] == "Title"
+                session.send("q")
+                session.finish()
+        with Session(binary, library, **environment) as session:
+            with server.accept() as client:
+                assert activity(client) is None
+                session.expect("Discord: connected", "Search: Title")
+                assert "Discord Application ID:" not in session.screen.text()
+                session.send("q")
+                session.finish()
+    path.unlink()
+
+    # Previously enabled configs with missing/invalid IDs prompt at startup too.
+    for value in ("", "invalid"):
+        config.write_text(json.dumps({"version": 1, "discord": {"enabled": True, "application_id": value}}))
+        with Session(binary, library, **environment) as session:
+            session.expect("Discord Application ID:", "Library: 1")
+            session.send("\x1b")
+            session.expect("Discord: off", "Search:")
+            assert not json.loads(config.read_text())["discord"]["enabled"]
+            session.send("q")
+            session.finish()
 
     for invalid in ({"enabled": None}, {"enabled": "yes"}, {"application_id": None},
                     {"application_id": 123}, {"application_id": "x" * 33}, []):
@@ -312,6 +365,8 @@ def tui_tests(binary, root):
         with Session(binary, library, **environment) as session:
             session.expect("invalid or unsupported settings file", "Library: 1")
             session.send("d")
+            session.expect("Discord Application ID:")
+            session.send("\x1b")
             session.send("q")
             session.finish()
         assert config.read_text() == original, "malformed Discord settings must be preserved"
@@ -326,7 +381,7 @@ def main():
         root = Path(temporary)
         worker_tests(options.test_binary, root)
         tui_tests(options.player_binary, root)
-    print("Discord fake-IPC tests passed: opt-in, framing, ping/pong, ACKs, throttling, reconnect, hostile/slow peers, settings and PTY responsiveness")
+    print("Discord fake-IPC tests passed: opt-in, framing, ping/pong, ACKs, throttling, reconnect, hostile/slow peers, settings, in-app ID setup and PTY responsiveness")
 
 
 if __name__ == "__main__":

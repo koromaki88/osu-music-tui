@@ -227,7 +227,7 @@ continues. Monochrome terminals work without colors.
 | `R` | Cycle repeat off → one → all |
 | `x` | Stop and rewind |
 | `r` | Refresh in the background (reload the export, or rerun the indexer) |
-| `d` | Toggle Discord Rich Presence (requires an application ID) |
+| `d` | Toggle Discord Rich Presence; prompt for an Application ID if needed |
 | `/` | Edit the search filter |
 | Esc | Clear the filter outside search mode |
 | `q` | Quit outside search mode |
@@ -265,21 +265,20 @@ playback commands keep their existing behavior.
 ### Optional Discord Rich Presence (development builds)
 
 Discord presence is **off by default** and currently available only in the TUI.
-With the player closed, add a `discord` object to your existing settings file,
-keeping its other fields (a new file also needs `"version": 1`):
-
-```json
-"discord": {
-  "enabled": false,
-  "application_id": "YOUR_DISCORD_APPLICATION_ID"
-}
-```
+Start the desktop Discord client, run the TUI, and press `d`. If no valid Application ID
+is saved, an in-app prompt appears—no manual config editing is needed.
 
 Create your own application in the [Discord Developer Portal](https://discord.com/developers/applications)
-and use its **Application ID**, not a bot token or client secret. Optionally upload a
-Rich Presence image named `osu_player`. No project-wide application ID is bundled yet.
-Start the desktop Discord client, run the TUI, then press `d` to enable presence.
-The toggle is saved; an absent/invalid ID prevents any connection attempt.
+and enter its **Application ID**, not a bot token or client secret. Press Enter to
+validate, save, and enable presence; Esc cancels without saving the draft. Backspace
+edits and Ctrl-U clears the input. Invalid input stays in the prompt and never connects.
+Playback continues while you edit. An already-enabled configuration with a missing or
+invalid ID also prompts at startup. Cancelling leaves Discord off.
+
+The Application ID and toggle are saved under `discord.application_id` and
+`discord.enabled` in the normal settings file; later presses of `d` simply toggle
+presence. Optionally upload a Rich Presence image named `osu_player` to your Discord
+application. No project-wide application ID is bundled yet.
 
 Presence shares the title, artist, playback timer, paused state, and an official beatmap
 link when available. Local paths, hashes, and library/session IDs are not sent.

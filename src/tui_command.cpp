@@ -154,8 +154,39 @@ void draw(const int row, const int column, const std::string_view text, const in
     }
 }
 
+struct DiscordSetup {
+    bool active{};
+    std::string input;
+    std::string error;
+};
+
+enum class SetupResult { editing, cancelled, accepted };
+
+SetupResult discord_setup_key(const wint_t key, const bool special, DiscordSetup& setup)
+{
+    if (!special && key == 27) { return SetupResult::cancelled; }
+    if ((!special && (key == '\n' || key == '\r')) || (special && key == KEY_ENTER)) {
+        if (valid_discord_application_id(setup.input)) { return SetupResult::accepted; }
+        setup.error = "Invalid Application ID: enter 17-20 decimal digits (not a token).";
+    } else if ((special && key == KEY_BACKSPACE) || (!special && (key == 127 || key == 8))) {
+        erase_last_utf8(setup.input);
+        setup.error.clear();
+    } else if (!special && key == 21) { // Ctrl-U
+        setup.input.clear();
+        setup.error.clear();
+    } else if (!special && std::iswprint(key)) {
+        const auto encoded = codepoint_utf8(static_cast<char32_t>(key));
+        if (setup.input.size() + encoded.size() <= 32) {
+            setup.input += encoded;
+            setup.error.clear();
+        }
+    }
+    return SetupResult::editing;
+}
+
 void render(const PlayerController& player, const LibraryView& view, const bool searching,
-            const std::string& notice, const bool colors, const bool refreshing, const std::string& discord_status)
+            const std::string& notice, const bool colors, const bool refreshing, const std::string& discord_status,
+            const DiscordSetup& discord_setup)
 {
     int rows{};
     int columns{};
@@ -163,7 +194,8 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
     erase();
     if (rows < 14 || columns < 50) {
         draw(0, 0, "Terminal too small", columns, A_BOLD);
-        draw(1, 0, "Resize to at least 50x14; q quits", columns);
+        draw(1, 0, discord_setup.active ? "Resize to at least 50x14; Esc cancels setup" :
+             "Resize to at least 50x14; q quits", columns);
         wnoutrefresh(stdscr);
         doupdate();
         return;
@@ -175,9 +207,11 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
         " | Shuffle: " + (player.shuffle() ? "on" : "off") +
         " | Repeat: " + std::string{repeat_name(player.repeat())} + (refreshing ? " | Index: running" : "");
     draw(1, 0, summary, columns);
-    draw(2, 0, "Search: " + view.query() + (searching ? "_  [Enter apply / Esc cancel]" : ""),
+    draw(2, 0, discord_setup.active ? "Discord Application ID: " + discord_setup.input + "_" :
+         "Search: " + view.query() + (searching ? "_  [Enter apply / Esc cancel]" : ""),
          columns, searching ? A_BOLD : A_NORMAL);
-    draw(3, 0, "Library (Enter plays selection; * marks current track)", columns);
+    draw(3, 0, discord_setup.active ? "Enter save & enable | Esc cancel | Ctrl-U clear | Use Application ID, not token" :
+         "Library (Enter plays selection; * marks current track)", columns);
 
     const auto visible_rows = static_cast<std::size_t>(rows - 10);
     if (view.matches().empty()) {
@@ -212,9 +246,12 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
     const auto filled = static_cast<std::size_t>(static_cast<double>(bar_width) * fraction);
     draw(rows - 4, 0, "[" + std::string(filled, '=') +
          std::string(static_cast<std::size_t>(bar_width) - filled, '-') + "]", columns);
-    draw(rows - 3, 0, notice, columns, A_NORMAL, colors ? 3 : 0);
-    draw(rows - 2, 0, "j/k move  Enter play  Space pause  n/p next/prev  / search  q quit", columns);
-    draw(rows - 1, 0, "Left/Right seek  +/- volume  s shuffle  R repeat  x stop  r refresh  d Discord", columns);
+    draw(rows - 3, 0, discord_setup.active && !discord_setup.error.empty() ? discord_setup.error : notice,
+         columns, A_NORMAL, colors ? 3 : 0);
+    draw(rows - 2, 0, discord_setup.active ? "Create an app: https://discord.com/developers/applications" :
+         "j/k move  Enter play  Space pause  n/p next/prev  / search  q quit", columns);
+    draw(rows - 1, 0, discord_setup.active ? "Copy its Application ID. Playback continues while you edit." :
+         "Left/Right seek  +/- volume  s shuffle  R repeat  x stop  r refresh  d Discord", columns);
     wnoutrefresh(stdscr);
     doupdate();
 }
@@ -321,7 +358,9 @@ int run_tui_command(RefreshOptions options)
     player.set_repeat(saved_settings.repeat);
     view.set_query(saved_settings.search);
     bool discord_enabled = saved_settings.discord_enabled;
-    const std::string discord_application_id = saved_settings.discord_application_id;
+    std::string discord_application_id = saved_settings.discord_application_id;
+    DiscordSetup discord_setup{discord_enabled && !valid_discord_application_id(discord_application_id),
+                               discord_application_id, {}};
     std::unique_ptr<DiscordPresence> discord;
     try {
         discord = std::make_unique<DiscordPresence>();
@@ -363,7 +402,7 @@ int run_tui_command(RefreshOptions options)
         const auto now = std::chrono::steady_clock::now();
         if (now >= next_frame) {
             render(player, view, searching, settings_warning.empty() ? notice : settings_warning,
-                   terminal.colors, refresh.busy(), discord ? discord->status() : "unavailable");
+                   terminal.colors, refresh.busy(), discord ? discord->status() : "unavailable", discord_setup);
             next_frame = now + std::chrono::milliseconds{100};
         }
         wint_t key{};
@@ -372,11 +411,23 @@ int run_tui_command(RefreshOptions options)
             if (result != ERR) {
                 if (result == KEY_CODE_YES && key == KEY_RESIZE) {
                     clearok(stdscr, true);
+                } else if (discord_setup.active) {
+                    const auto action = discord_setup_key(key, result == KEY_CODE_YES, discord_setup);
+                    if (action != SetupResult::editing) {
+                        discord_setup.active = false;
+                        discord_enabled = action == SetupResult::accepted;
+                        if (discord_enabled) { discord_application_id = discord_setup.input; }
+                        if (discord) { discord->configure(discord_enabled, discord_application_id); }
+                    }
                 } else if (searching) {
                     search_key(key, result == KEY_CODE_YES, view, searching, saved_query);
                 } else if (result != KEY_CODE_YES && key == 'd') {
-                    discord_enabled = !discord_enabled;
-                    if (discord) { discord->configure(discord_enabled, discord_application_id); }
+                    if (!discord_enabled && !valid_discord_application_id(discord_application_id)) {
+                        discord_setup = {true, discord_application_id, {}};
+                    } else {
+                        discord_enabled = !discord_enabled;
+                        if (discord) { discord->configure(discord_enabled, discord_application_id); }
+                    }
                 } else if (result != KEY_CODE_YES && key == 'r') {
                     notice = refresh.start() ? (export_mode ? "Reloading library in background."
                         : "Indexing in background; lazer must be closed.") : "Refresh already running.";

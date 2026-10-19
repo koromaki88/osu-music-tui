@@ -365,6 +365,11 @@ or internal IDs. Metadata is UTF-8 sanitized and byte-bounded before transmissio
 Settings version 1 accepts an optional `discord` object with `enabled` and
 `application_id`; older files default off. There is no bundled project application ID.
 Users supply their own application ID, optionally with the `osu_player` image asset.
+Pressing `d` to enable without a valid ID opens a nonblocking TUI input prompt; an
+enabled-but-invalid saved configuration also prompts at startup. Enter validates the
+draft before saving/enabling; Esc cancels and leaves Discord off, without replacing
+the saved ID. Backspace and Ctrl-U edit the draft. Search and transport keys are not
+dispatched while editing; audio pumping and library refresh continue normally.
 No OAuth, bot/account token, client secret, HTTP request, or Discord SDK is involved.
 Only the TUI currently configures/publishes presence; CLI playback is unchanged.
 
@@ -390,7 +395,8 @@ destruction joins the worker. Abrupt process termination cannot guarantee a clea
 worker harness. `tests/discord_integration.py` drives isolated fake sockets and a PTY,
 covering opt-in/invalid IDs, Unicode/privacy, ping/pong, fragmented/malformed/oversized
 frames, ACK/READY timeouts, reconnect, pause/seek/stop, normal shutdown, saved toggles,
-malformed config preservation, playback responsiveness, and a `/proc`-based idle-worker
+malformed config preservation, Application ID setup/validation/cancellation/restarts
+and uninterrupted playback while editing, and a `/proc`-based idle-worker
 wakeup regression check. Both run in `make test`
 and are registered in CMake. The full native and ASan/UBSan suites pass; logs are
 `artifacts/tests.log` and `artifacts/sanitizers/tests.log`. Regular binaries were rebuilt

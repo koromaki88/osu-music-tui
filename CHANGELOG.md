@@ -9,6 +9,8 @@
   reconnect/backoff, and fake-socket/PTY tests. Defaults off; live Discord unverified.
 - Removed periodic idle Discord worker polling and redundant progress metadata copies;
   state/socket notifications now wake the worker only when needed.
+- Added an in-app Discord Application ID prompt when enabling without a valid saved
+  ID, with validation, cancellation, and automatic persistence; playback continues.
 - Replaced the application icon's self-intersecting note with a centered eighth note.
 
 ## 0.2.0
