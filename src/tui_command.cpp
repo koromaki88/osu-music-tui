@@ -401,7 +401,7 @@ int run_tui_command(RefreshOptions options)
             next_frame = std::chrono::steady_clock::now();
         }
     }
-    player.pause();
+    player.shutdown();
     return interrupted ? 128 + interrupted : 0;
 }
 

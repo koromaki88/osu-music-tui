@@ -9,8 +9,8 @@
 namespace osu_player {
 
 PlayerController::PlayerController(Library library, std::unique_ptr<AudioPlayer> audio,
-                                   const std::uint32_t random_seed)
-    : library_{std::move(library)}, audio_{std::move(audio)}, random_{random_seed}
+                                   const std::uint32_t random_seed, PlaybackClock clock)
+    : library_{std::move(library)}, audio_{std::move(audio)}, random_{random_seed}, playback_{std::move(clock)}
 {
     if (!audio_) {
         throw std::invalid_argument{"playback controller requires an audio backend"};
@@ -32,6 +32,11 @@ void PlayerController::play()
         try {
             audio_->play();
             state_ = PlayerState::playing;
+            if (playback_.snapshot()) {
+                playback_.resume(audio_->position(), audio_->duration());
+            } else {
+                playback_.begin(*current_track(), audio_->position(), audio_->duration());
+            }
         } catch (const AudioOutputError&) {
             fail_session();
             throw;
@@ -60,6 +65,7 @@ void PlayerController::pause()
 {
     if (state_ == PlayerState::playing) {
         audio_->pause();
+        playback_.pause(audio_->position(), audio_->duration());
         state_ = PlayerState::paused;
     }
 }
@@ -68,6 +74,7 @@ void PlayerController::stop()
 {
     if (cursor_) {
         audio_->pause();
+        end_playback(PlaybackEndReason::stopped);
         state_ = PlayerState::stopped;
         try {
             audio_->stop();
@@ -87,6 +94,7 @@ void PlayerController::next()
         play();
         return;
     }
+    end_playback(PlaybackEndReason::skipped);
     if (*cursor_ + 1 < queue_.size()) {
         start_from(*cursor_ + 1, false, repeat_ == RepeatMode::all);
     } else if (repeat_ == RepeatMode::all) {
@@ -103,6 +111,7 @@ void PlayerController::previous()
         play();
         return;
     }
+    end_playback(PlaybackEndReason::skipped);
     if (*cursor_ > 0) {
         start_from(*cursor_ - 1, true, repeat_ == RepeatMode::all);
     } else if (repeat_ == RepeatMode::all) {
@@ -126,7 +135,9 @@ void PlayerController::update()
         recover(error.what());
         return;
     }
+    playback_.sample(audio_->position(), audio_->duration());
     if (audio_->state() == PlaybackState::finished) {
+        end_playback(PlaybackEndReason::completed);
         if (repeat_ == RepeatMode::one) {
             start_from(*cursor_, false, false);
         } else {
@@ -141,17 +152,32 @@ void PlayerController::seek(const AudioPlayer::Milliseconds target)
         return;
     }
     const bool keep_paused = state_ != PlayerState::playing;
+    playback_.sample(audio_->position(), audio_->duration());
     try {
         audio_->seek(target);
+        playback_.seek(audio_->position(), audio_->duration());
         if (state_ == PlayerState::stopped || state_ == PlayerState::finished) {
             state_ = PlayerState::paused;
         }
     } catch (const AudioOutputError&) {
+        if (const auto& snapshot = playback_.snapshot()) {
+            playback_.end(PlaybackEndReason::output_error, snapshot->position, snapshot->duration);
+        }
         fail_session();
         throw;
     } catch (const std::runtime_error& error) {
+        if (const auto& snapshot = playback_.snapshot()) {
+            playback_.end(PlaybackEndReason::track_error, snapshot->position, snapshot->duration);
+        }
         recover(error.what(), keep_paused);
     }
+}
+
+void PlayerController::shutdown()
+{
+    audio_->pause();
+    end_playback(PlaybackEndReason::shutdown);
+    if (state_ == PlayerState::playing) { state_ = PlayerState::paused; }
 }
 
 void PlayerController::set_volume(const float volume) { audio_->set_volume(volume); }
@@ -212,12 +238,19 @@ void PlayerController::replace_library(Library library)
         cursor = static_cast<std::size_t>(std::find(queue.begin(), queue.end(), *current) - queue.begin());
     }
     std::vector<bool> failures(queue.size(), false); // Refresh retries repaired files.
-    if (!current) { audio_->pause(); }
+    if (!current) {
+        audio_->pause();
+        end_playback(PlaybackEndReason::removed);
+    }
     library_ = std::move(library);
     queue_ = std::move(queue);
     failed_tracks_ = std::move(failures);
     cursor_ = cursor;
     if (!current) { state_ = queue_.empty() ? PlayerState::empty : PlayerState::stopped; }
+    else {
+        playback_.sample(audio_->position(), audio_->duration());
+        playback_.metadata(*current_track());
+    }
 }
 
 const Library& PlayerController::library() const noexcept { return library_; }
@@ -255,10 +288,23 @@ PlaybackErrors PlayerController::take_errors()
     return std::exchange(errors_, PlaybackErrors{});
 }
 
+const std::optional<PlaybackSnapshot>& PlayerController::playback_snapshot() const noexcept
+{
+    return playback_.snapshot();
+}
+
+PlaybackEvents PlayerController::take_playback_events() { return playback_.take_events(); }
+
+void PlayerController::end_playback(const PlaybackEndReason reason)
+{
+    playback_.end(reason, audio_->position(), audio_->duration());
+}
+
 void PlayerController::start_from(std::size_t position, const bool backwards, const bool wrap,
                                   const bool autoplay)
 {
     audio_->pause(); // A failed load must not leave the previous source audible.
+    end_playback(PlaybackEndReason::replaced);
     cursor_.reset();
     state_ = PlayerState::stopped;
     for (std::size_t attempts = 0; attempts < queue_.size(); ++attempts) {
@@ -271,6 +317,9 @@ void PlayerController::start_from(std::size_t position, const bool backwards, co
                 }
                 cursor_ = position;
                 state_ = autoplay ? PlayerState::playing : PlayerState::paused;
+                if (autoplay) {
+                    playback_.begin(library_.tracks()[index], audio_->position(), audio_->duration());
+                }
                 return;
             } catch (const AudioOutputError&) {
                 fail_session();
@@ -303,6 +352,7 @@ void PlayerController::finish()
 
 void PlayerController::recover(const std::string& message, const bool keep_paused)
 {
+    end_playback(PlaybackEndReason::track_error);
     record_error(*current_index(), message);
     // Errors never trigger repeat-one. Move on rather than retrying the same
     // broken stream forever; a transition visits each candidate at most once.
@@ -342,6 +392,7 @@ void PlayerController::reshuffle_cycle()
 void PlayerController::fail_session()
 {
     audio_->pause();
+    end_playback(PlaybackEndReason::output_error);
     cursor_.reset();
     state_ = PlayerState::failed;
 }

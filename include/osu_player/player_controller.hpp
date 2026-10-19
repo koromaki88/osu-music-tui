@@ -2,6 +2,7 @@
 
 #include "osu_player/audio_player.hpp"
 #include "osu_player/library.hpp"
+#include "osu_player/playback_events.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -31,7 +32,7 @@ struct PlaybackErrors {
 class PlayerController {
 public:
     PlayerController(Library library, std::unique_ptr<AudioPlayer> audio,
-                     std::uint32_t random_seed = std::random_device{}());
+                     std::uint32_t random_seed = std::random_device{}(), PlaybackClock clock = {});
 
     void play();
     void play_track(std::size_t library_index);
@@ -41,6 +42,8 @@ public:
     void previous();
     void update();
     void seek(AudioPlayer::Milliseconds position);
+    // Close the active play session on normal frontend exit, without rewinding.
+    void shutdown();
     void set_volume(float volume);
     void set_shuffle(bool enabled);
     void set_repeat(RepeatMode mode) noexcept;
@@ -59,6 +62,8 @@ public:
     [[nodiscard]] std::optional<AudioPlayer::Milliseconds> duration() const noexcept;
     [[nodiscard]] float volume() const noexcept;
     [[nodiscard]] PlaybackErrors take_errors();
+    [[nodiscard]] const std::optional<PlaybackSnapshot>& playback_snapshot() const noexcept;
+    [[nodiscard]] PlaybackEvents take_playback_events();
 
 private:
     void start_from(std::size_t queue_position, bool backwards, bool wrap, bool autoplay = true);
@@ -67,6 +72,7 @@ private:
     void record_error(std::size_t library_index, const std::string& message);
     void reshuffle_cycle();
     void fail_session();
+    void end_playback(PlaybackEndReason reason);
 
     Library library_;
     std::unique_ptr<AudioPlayer> audio_;
@@ -78,6 +84,7 @@ private:
     RepeatMode repeat_{RepeatMode::off};
     bool shuffle_{};
     PlaybackErrors errors_;
+    PlaybackMonitor playback_;
 };
 
 }  // namespace osu_player

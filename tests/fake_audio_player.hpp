@@ -85,7 +85,7 @@ public:
 
     [[nodiscard]] osu_player::PlaybackState state() const noexcept override { return playback; }
     [[nodiscard]] Milliseconds position() const noexcept override { return position_value; }
-    [[nodiscard]] std::optional<Milliseconds> duration() const noexcept override { return Milliseconds{1000}; }
+    [[nodiscard]] std::optional<Milliseconds> duration() const noexcept override { return duration_value; }
     [[nodiscard]] float volume() const noexcept override { return volume_value; }
 
     std::string source;
@@ -102,5 +102,6 @@ public:
     bool fail_output_update{};
     osu_player::PlaybackState playback{osu_player::PlaybackState::empty};
     Milliseconds position_value{};
+    std::optional<Milliseconds> duration_value{Milliseconds{1000}};
     float volume_value{0.7F};
 };

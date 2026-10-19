@@ -287,3 +287,79 @@ artist/title. Inspect the synthetic fixture without touching real game data:
 ./bin/osu-player library tests/fixtures/library.ndjson
 ./bin/osu-player library tests/fixtures/library.ndjson triangles
 ```
+
+## Discord / Last.fm integration foundation
+
+Step 1 is implemented in `playback_events.hpp/.cpp` and `PlayerController`. It performs
+no network/socket/disk operations and does not connect to Discord or submit scrobbles.
+Existing 0.2.0 packages do not include this post-release foundation or later icon edits.
+
+### Event contract
+
+- `PlayerController::take_playback_events()` drains a value-owned batch in occurrence
+  order. A future control-thread dispatcher should drain once per loop and fan out copies
+  to integration-owned workers; neither networking nor consumer callbacks belong inside
+  the controller. Event metadata intentionally excludes filesystem paths and filenames.
+- Events cover successful start, progress, pause/resume, successful seek, metadata change,
+  timing eligibility, and session end with an explicit reason (EOF, skip, replacement,
+  stop, decoder/output failure, refresh removal, or frontend shutdown).
+- Each successful new play has a random per-controller namespace plus a session counter,
+  independent of shuffle's seeded RNG and wall time. Repeat-one, repeat-all wrapping,
+  manual restart, and play after stop get new IDs. Pause/resume, seeking, preference
+  changes, and refresh retaining stable ID + audio hash preserve the session.
+- Failed loads/plays and loaded-but-paused recovery replacements are not announced as
+  listens. A recovered paused selection gets a session only when playback actually starts.
+- `playback_snapshot()` exposes the current session on the control thread; copy it before
+  crossing threads or retaining it across mutations. Ended-event snapshots retain final
+  position, duration, metadata, listening time, original wall start timestamp, and session
+  ID even after the next load resets the audio backend.
+- Adjacent progress events coalesce. The journal retains at most 128 events and reports
+  the dropped count via `omitted`. A consumer must resynchronize from a current snapshot
+  after overflow; it must not infer missing listens or promise lossless scrobbling from
+  a dropped history. This journal is not the future durable submission queue.
+- Frontends call `shutdown()` on normal quit (including handled TUI signals) to settle
+  and end the active session without rewinding. Abrupt process termination cannot emit
+  a final event; crash recovery/durable eligible-submission storage belongs to a later step.
+
+### Listening-time rules
+
+`PlaybackClock` injects steady and wall clocks for deterministic tests. Wall time records
+the original playback start; only steady elapsed time and positive backend-consumed media
+progress contribute to listening. Clock time with no media movement earns nothing.
+Elapsed allowance spans bursty SDL device reports and irregular polling, preserving
+submillisecond fractions; credit never exceeds observed forward media movement or
+available playing time. Excess media jumps cannot credit future silence.
+
+Pause/resume and successful seeks rebase accounting; paused time and the seek displacement
+do not count. Before seek/stop/replacement/EOF the old session is settled before position
+is reset. This is a conservative playback estimate, not proof a human heard the output;
+playback speed changes are not supported. Failed seeks do not count uncertain displacement.
+
+The monitor announces timing eligibility once per session when known audio duration is
+strictly greater than 30 seconds and credited listening reaches half its duration or four
+minutes, whichever is earlier. Unknown/invalid duration cannot qualify speculatively; a
+duration learned later can qualify prior accumulated listening. Metadata validity,
+authorization, API policy, duplicate handling, and delivery remain separate checks.
+Reference: [Last.fm scrobbling rules](https://www.last.fm/api/scrobbling).
+
+`tests/playback_events_test.cpp` exercises these rules using a fake backend/clock, including
+EOF repeat, error recovery, refresh identity/metadata changes, unknown durations, timing
+boundaries, clock corrections, buffered consumption, owned snapshots, and journal overflow.
+It runs under `make test` and is registered in CMake as `playback-events`.
+
+Validation: the full native and ASan/UBSan suites pass, including the fake-clock tests
+and existing audio/TUI/refresh integration tests. Logs are `artifacts/tests.log` and
+`artifacts/sanitizers/tests.log`. Regular development binaries were restored afterward.
+CMake registration is updated but remains unverified in this environment.
+
+### Next steps (not implemented)
+
+1. Discord IPC worker, optional saved toggle, presence rendering, throttling, reconnect,
+   and fake-socket tests. No Discord account token or bot features are planned.
+2. Last.fm browser authorization, securely stored session credentials, and Now Playing.
+3. Durable account-associated eligible-scrobble queue, HTTPS transport, API response
+   handling, bounded retries/backoff, and explicit disconnect/queue controls.
+
+Both integrations should default off. Keep consumer/network failures isolated from
+playback and redact credentials from diagnostics. No real service requests or package
+rebuilds are part of step 1.

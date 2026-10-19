@@ -41,6 +41,7 @@ add_library(osu_player_core
     src/storage_path.cpp
     src/track.cpp
     src/player_controller.cpp
+    src/playback_events.cpp
     src/library_view.cpp
     src/terminal_text.cpp
     src/library_refresh.cpp
@@ -87,6 +88,12 @@ if(BUILD_TESTING)
     osu_player_set_warnings(player-controller-tests)
     osu_player_enable_sanitizers(player-controller-tests)
     add_test(NAME player-controller COMMAND player-controller-tests)
+
+    add_executable(playback-events-tests tests/playback_events_test.cpp)
+    target_link_libraries(playback-events-tests PRIVATE osu_player_core)
+    osu_player_set_warnings(playback-events-tests)
+    osu_player_enable_sanitizers(playback-events-tests)
+    add_test(NAME playback-events COMMAND playback-events-tests)
 
     add_executable(tui-model-tests tests/tui_model_test.cpp)
     target_link_libraries(tui-model-tests PRIVATE osu_player_core)

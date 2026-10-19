@@ -179,6 +179,7 @@ int run_session(Library library)
                 pending.erase(0, newline + 1);
                 try {
                     if (!command(player, line)) {
+                        player.shutdown();
                         return 0;
                     }
                 } catch (const std::invalid_argument& error) {

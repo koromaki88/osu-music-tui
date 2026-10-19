@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Added the shared playback-event and listening-time foundation for future Discord
+  Rich Presence and Last.fm scrobbling. No service connections or submissions yet.
+- Replaced the application icon's self-intersecting note with a centered eighth note.
+
 ## 0.2.0
 
 ### Added
