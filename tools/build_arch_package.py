@@ -16,14 +16,14 @@ NAME = "osu-music-player-0.4.0"
 
 
 def source_files(root):
-    patterns = ("Makefile", "README.md", "DEVELOPMENT.md", "CHANGELOG.md", "src/*.cpp", "src/*.hpp", "include/osu_player/*.hpp",
+    patterns = ("Makefile", "README.md", "DEVELOPMENT.md", "CHANGELOG.md", "docs/*.md", "src/*.cpp", "src/*.hpp", "include/osu_player/*.hpp",
                 "tests/*.cpp", "tests/*.hpp", "tests/*.py", "tests/fixtures/*.ndjson",
                 "tests/osu-indexer-tests/*.cs", "tests/osu-indexer-tests/*.csproj",
                 "tests/osu-indexer-tests/packages.lock.json",
                 "tools/osu-indexer/*.cs", "tools/osu-indexer/*.csproj",
                 "tools/osu-indexer/packages*.lock.json", "tools/*appimage.py",
                 "packaging/osu-player.desktop", "packaging/osu-player.svg",
-                "packaging/arch/LICENSE-NOTICE", "packaging/arch/PKGBUILD",
+                 "packaging/arch/LICENSE-NOTICE", "packaging/arch/PKGBUILD", "packaging/THIRD_PARTY.md",
                 "tools/build_arch_package.py", "tools/install_dotnet.py",
                 "tools/run_appimage_build.py", "packaging/Dockerfile")
     return sorted({path for pattern in patterns for path in root.glob(pattern)

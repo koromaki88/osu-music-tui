@@ -255,6 +255,9 @@ def build(options):
         shutil.copy2(ROOT / "README.md", info / "README.md")
         for name in ("CHANGELOG.md", "DEVELOPMENT.md"):
             shutil.copy2(ROOT / name, info / name)
+        shutil.copytree(ROOT / "docs", info / "docs")
+        (info / "packaging").mkdir()
+        shutil.copy2(ROOT / "packaging/THIRD_PARTY.md", info / "packaging/THIRD_PARTY.md")
         # Reuse the runtime in the checksum-pinned tool image. Otherwise
         # appimagetool downloads an unpinned continuous runtime during each build.
         offset = int(run([tool_image, "--appimage-offset"], capture_output=True, text=True).stdout)

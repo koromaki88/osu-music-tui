@@ -40,6 +40,10 @@ package() {
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
     install -Dm644 CHANGELOG.md "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
     install -Dm644 DEVELOPMENT.md "$pkgdir/usr/share/doc/$pkgname/DEVELOPMENT.md"
+    for document in docs/*.md; do
+        install -Dm644 "$document" "$pkgdir/usr/share/doc/$pkgname/$document"
+    done
+    install -Dm644 packaging/THIRD_PARTY.md "$pkgdir/usr/share/doc/$pkgname/packaging/THIRD_PARTY.md"
     install -Dm644 packaging/arch/LICENSE-NOTICE "$pkgdir/usr/share/licenses/$pkgname/LICENSE-NOTICE"
     install -Dm644 tools/osu-indexer/packages.lock.json "$pkgdir/usr/share/doc/$pkgname/packages.lock.json"
     install -Dm644 packaging/osu-player.desktop "$pkgdir/usr/share/applications/osu-player.desktop"

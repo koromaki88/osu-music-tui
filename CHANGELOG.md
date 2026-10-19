@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reorganized documentation into a concise quick start and focused usage,
+  integration, architecture, packaging, and release-validation guides.
+
 ## 0.4.0
 
 - Packaged optional Last.fm authorization, Now Playing, and durable scrobbling;
