@@ -9,11 +9,19 @@
 3. Update the relevant documentation and report validation results. State whether
    packages were rebuilt: existing artifacts may not contain current source changes.
 
-Use synthetic fixtures, fake services, and dummy audio. **Do not launch osu! or scan
-the real library for routine validation.** Never modify lazer's database or content.
-Keep user instructions in the README and usage guides, process policy here, and
-implementation details in the architecture guide. Put release history in the
-changelog and validation evidence in the release record, not in feature instructions.
+> [!IMPORTANT]
+> Use synthetic fixtures, fake services, and dummy audio. Do not launch osu! or scan
+> the real library for routine validation. Never modify lazer's database or content.
+
+### Where documentation belongs
+
+| Content | Location |
+|---|---|
+| User instructions | README and usage guides |
+| Workflow and process policy | This document |
+| Implementation details | Architecture guide |
+| Release history | Changelog |
+| Validation evidence | Release record, not feature instructions |
 
 ## Tests
 
@@ -25,10 +33,11 @@ changelog and validation evidence in the release record, not in feature instruct
 | `make test-arch-package` | Build and validate extracted Arch package | `test-arch-package.log` |
 | `make test-integration` | Explicitly authorized real-library verification only | `test-integration.log` |
 
-Targets display stdout/stderr and save logs, preserving failures with `pipefail` and
-`tee`. Each run replaces its log; preserve important earlier logs before rerunning.
-Override the directory with `TEST_LOG_DIR=/path/to/logs`. Logs/artifacts are gitignored.
-`make test` checks packaging helpers but does **not** build packages.
+- **Output:** targets display stdout/stderr and save logs; `pipefail` and `tee`
+  preserve failures.
+- **Retention:** each run replaces its log. Preserve important earlier logs before rerunning.
+- **Location:** override with `TEST_LOG_DIR=/path/to/logs`. Logs/artifacts are gitignored.
+- **Scope:** `make test` checks packaging helpers but does **not** build packages.
 
 Coverage and test-file locations are described in [Architecture](docs/ARCHITECTURE.md).
 
@@ -63,20 +72,22 @@ make test-integration OSU_DIR=/path/to/osu-data
 make test-integration OSU_DIR=/path/to/osu-data INTEGRATION_VERIFY=full INTEGRATION_TIMEOUT=900
 ```
 
-Quick mode checks Realm/config control files, root entries, and exported audio-path
-existence; it does not prove every audio file stayed unchanged. Full mode reads the
-library twice. The default 300-second timeout applies per subprocess, not to hashing
-or the entire test. Output shows progress and at most five song titles.
+- **Quick mode:** checks Realm/config control files, root entries, and exported
+  audio-path existence—not proof that every audio file stayed unchanged.
+- **Full mode:** reads the library twice.
+- **Timeout:** 300 seconds by default, per subprocess—not hashing or the entire test.
+- **Output:** progress and at most five song titles.
 
 ## Packaging policy
 
-**Do not package ordinary features, fixes, refactors, or documentation changes.**
-A completed milestone is a reason to propose a release, not permission to build one.
+> [!IMPORTANT]
+> Do not package ordinary features, fixes, refactors, or documentation changes.
+> A completed milestone is a reason to propose a release, not permission to build one.
 
-Build when the user requests a package/release, approves a release milestone, or asks
-to validate packaging, installation, portability, or a packaged regression. Changes
-to packaging scripts, bundled runtimes, dependencies/ABIs, indexer discovery, or install
-layout warrant recommending targeted package validation; obtain approval first.
+- **Approval:** build when the user requests a package/release, approves a release
+  milestone, or asks to validate packaging, installation, portability, or a packaged regression.
+- **Recommend validation:** packaging scripts, bundled runtimes, dependencies/ABIs,
+  indexer discovery, and install-layout changes warrant targeted checks. Obtain approval first.
 
 Build only the requested/affected format. Prefer `make test-appimage` or
 `make test-arch-package`: these already build the package, so do not build it separately.
@@ -93,7 +104,9 @@ See [Packaging](docs/PACKAGING.md) for requirements and commands.
 4. Record output paths, coverage, and limitations in [Release validation](docs/RELEASES.md).
    Never call a failed or unvalidated candidate verified.
 
-Packaging does not authorize installation, publication, commits, tags, pushes, deleting
-old artifacts, or global Docker cleanup. Each requires separate approval. Public
-distribution remains blocked on application-license selection and dependency/source
-compliance review; see [third-party notices](packaging/THIRD_PARTY.md).
+### Separate approvals
+
+- Packaging does **not** authorize installation, publication, commits, tags, pushes,
+  deleting old artifacts, or global Docker cleanup. Each requires separate approval.
+- Public distribution remains blocked on application-license selection and
+  dependency/source compliance review; see [third-party notices](packaging/THIRD_PARTY.md).

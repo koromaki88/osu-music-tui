@@ -7,9 +7,10 @@ or `./bin/osu-player` for a source build.
 
 ## Open a library
 
-**Close lazer before indexing or refreshing.** The player uses an offline database
-copy; a live Realm snapshot is not supported. It never launches the game or writes
-to the original database/content store.
+> [!IMPORTANT]
+> Close lazer before indexing or refreshing. The player uses an offline database
+> copy; live Realm snapshots are unsupported. It never launches the game or writes
+> to the original database/content store.
 
 ```bash
 osu-player tui                                      # ~/.local/share/osu
@@ -19,18 +20,21 @@ osu-player tui --no-cache
 osu-player tui artifacts/library.ndjson              # existing export
 ```
 
-Source builds need `make indexer` first; packages include the adapter. To override
-discovery, pass `--indexer /absolute/path/to/executable`. It must accept
-`--osu-dir DIRECTORY`, not be a DLL or shell command string. No build/restore runs
-inside the UI. Indexing timeout accepts 1–86400 seconds.
+- **Source builds:** run `make indexer` first; packages include the adapter.
+- **Custom adapter:** pass `--indexer /absolute/path/to/executable`. It must accept
+  `--osu-dir DIRECTORY`, not be a DLL or shell command string.
+- **Builds:** no build/restore runs inside the UI.
+- **Timeout:** accepts 1–86400 seconds.
 
 ## Terminal controls
 
-The UI starts without autoplay. Use an interactive terminal with a valid `TERM`
-entry and preferably a UTF-8 locale such as `LANG=C.UTF-8`. Minimum size is
-50 columns × 14 rows; smaller terminals show a resize message without stopping audio.
-Monochrome terminals work. Mouse input is not supported; complex emoji may render
-imperfectly. Quit and handled signals restore terminal settings.
+- **Startup:** no autoplay.
+- **Terminal:** interactive, with a valid `TERM` entry; UTF-8 such as `LANG=C.UTF-8`
+  is recommended. Monochrome terminals work.
+- **Size:** at least 50 columns × 14 rows. Smaller terminals show a resize message
+  without stopping audio.
+- **Limitations:** no mouse input; complex emoji may render imperfectly.
+- **Cleanup:** quit and handled signals restore terminal settings.
 
 | Key | Action |
 |---|---|
@@ -52,36 +56,48 @@ imperfectly. Quit and handled signals restore terminal settings.
 | Esc | Clear filter outside search mode |
 | `q` | Quit outside search mode |
 
-Search filters as you type. Enter applies it; press Enter again to play. Esc cancels
-the edit, Backspace removes one UTF-8 codepoint, and Ctrl-U clears the query. Matching
-is ASCII-case-insensitive and supports exact Unicode text. Filtering does not change
-the playback queue or interrupt audio.
+### Search
 
-EOF advances automatically. Repeat-one affects EOF, not manual next/previous.
-Manual navigation starts playback even from pause/stop. Shuffle preserves played
-history and the current track; repeat-all reshuffles at a forward cycle boundary,
-avoiding an immediate duplicate when possible. Failed tracks are skipped and not
-retried automatically during that session; explicit selection retries them.
-Device failures stop playback. The TUI stays open after errors or queue completion.
+- Filters update as you type; Enter applies the filter, then Enter again plays.
+- Esc cancels the edit; Backspace removes one UTF-8 codepoint; Ctrl-U clears the query.
+- Matching is ASCII-case-insensitive and supports exact Unicode text.
+- Filtering does not change the playback queue or interrupt audio.
+
+### Queue behavior
+
+- **EOF:** advances automatically. Repeat-one affects EOF, not manual next/previous.
+- **Navigation:** manual next/previous starts playback even from pause/stop.
+- **Shuffle:** preserves played history and the current track. Repeat-all reshuffles
+  at a forward cycle boundary, avoiding an immediate duplicate when possible.
+- **Failed tracks:** skipped without automatic retries during that session;
+  explicit selection retries them.
+- **Device failures:** stop playback. The TUI stays open after errors or queue completion.
 
 ## Refresh and cache
 
 After imports/removals, close lazer and press `r`. There is no automatic library
 watcher. Integration setup does not require reindexing.
 
-Directory mode refreshes through the adapter; export mode reloads the file. Only one
-refresh runs at a time. A stale library remains usable during indexing, and a failed
-refresh retains the last usable library/cache. Unchanged current tracks keep playing;
-removed/replaced tracks pause without autoplay. Search, surviving selection/queue
-entries, and playback preferences are retained where possible.
+### What refresh preserves
 
-Caches live in `$XDG_CACHE_HOME/osu-music-player/`, defaulting to
-`~/.cache/osu-music-player/` for unset/relative XDG paths. Each canonical source
-directory gets a private cache. Unchanged Realm metadata can reuse it; corrupt caches
-trigger reindexing. `r` forces refresh even if Realm is unchanged. Cache failures are
-shown but do not prevent use of a successfully indexed library. Cache/temp locations
-inside the source library are rejected. Quit/timeouts clean up adapter processes and
-temporary copies.
+- **Source:** directory mode runs the adapter; export mode reloads the file.
+- **Availability:** one refresh at a time; the stale library stays usable during indexing.
+- **Failure recovery:** failed refreshes retain the last usable library/cache.
+- **Playback:** unchanged current tracks keep playing; removed/replaced tracks pause
+  without autoplay.
+- **UI state:** search, surviving selection/queue entries, and preferences are retained
+  where possible.
+
+### Cache rules
+
+- **Location:** `$XDG_CACHE_HOME/osu-music-player/`, defaulting to
+  `~/.cache/osu-music-player/` for unset/relative XDG paths. Each canonical source
+  directory gets a private cache.
+- **Reuse:** unchanged Realm metadata can reuse the cache; corrupt caches trigger
+  reindexing. `r` forces refresh even if Realm is unchanged.
+- **Failures:** reported without preventing use of a successfully indexed library.
+- **Safety:** cache/temp locations inside the source library are rejected.
+- **Cleanup:** quit/timeouts clean up adapter processes and temporary copies.
 
 ## Preferences and private data
 
@@ -92,16 +108,21 @@ temporary copies.
 | Last.fm listening outbox | `~/.config/osu-player/lastfm/scrobbles.json` |
 | Library cache | `~/.cache/osu-music-player/` |
 
-Config files use an absolute `$XDG_CONFIG_HOME` when set. Preferences are shared
-across libraries/builds and save volume, shuffle, repeat, integration enablement,
-Discord Application ID, and applied search. Track, position, and queue are never
-restored. Defaults are 70% volume, shuffle/repeat/integrations off, and empty search.
+Config files use an absolute `$XDG_CONFIG_HOME` when set.
 
-Malformed/newer settings are preserved with a warning; persistence is disabled for
-that session. Multiple instances are last-writer-wins. To reset preferences, close
-all instances and remove only `settings.json`; no library/cache deletion is needed.
-Only the TUI saves preferences. See [integration privacy](INTEGRATIONS.md#privacy-and-storage)
-before handling credentials or listening-history files.
+- **Saved across libraries/builds:** volume, shuffle, repeat, integration enablement,
+  Discord Application ID, and applied search.
+- **Never restored:** track, position, or queue.
+- **Defaults:** 70% volume, shuffle/repeat/integrations off, empty search.
+- **Scope:** only the TUI saves preferences; multiple instances are last-writer-wins.
+
+> [!NOTE]
+> Malformed/newer settings are preserved with a warning; persistence is disabled for
+> that session. To reset preferences, close all instances and remove only
+> `settings.json`—no library/cache deletion is needed.
+
+See [integration privacy](INTEGRATIONS.md#privacy-and-storage) before handling
+credentials or listening-history files.
 
 ## AppImage without FUSE
 
@@ -112,10 +133,12 @@ before handling credentials or listening-history files.
 ./squashfs-root/AppRun tui
 ```
 
-Keep the extracted directory together. The AppImage can otherwise be moved/renamed
-without its source tree. glibc and the dynamic loader are host-provided; Alpine/musl,
-Windows, and macOS are not supported. Verify adjacent checksums with `sha256sum -c`;
-checksums detect corruption but are not publisher signatures.
+- **Relocation:** keep the extracted directory together. The AppImage itself can
+  otherwise be moved/renamed without its source tree.
+- **Host requirements:** glibc and the dynamic loader are host-provided. Alpine/musl,
+  Windows, and macOS are unsupported.
+- **Verification:** use `sha256sum -c` on adjacent checksum files. Checksums detect
+  corruption but are not publisher signatures.
 
 ## CLI commands
 
@@ -126,9 +149,12 @@ osu-player library artifacts/library.ndjson [SEARCH]
 osu-player queue artifacts/library.ndjson
 ```
 
-`HASH` is a content-store audio SHA-256. `probe`/`library` need no audio device.
-`library -` accepts NDJSON on stdin; `queue` needs a file because stdin is used for
-controls. CLI playback does not publish Discord/Last.fm updates or save preferences.
+- **Hash:** `HASH` is a content-store audio SHA-256.
+- **Audio device:** not needed for `probe`/`library`.
+- **Input:** `library -` accepts NDJSON on stdin; `queue` needs a file because stdin
+  is reserved for controls.
+- **Integrations/settings:** CLI playback does not publish Discord/Last.fm updates
+  or save preferences.
 
 Type commands followed by Enter:
 
@@ -149,7 +175,9 @@ Type commands followed by Enter:
 Single-track playback ends at EOF; queue mode exits at the end with repeat off.
 Decoder/output errors are reported; all-broken queues terminate instead of looping.
 
-To export from a source build, close lazer first and keep build logs out of NDJSON:
+### Export a library
+
+Close lazer first and keep build logs out of NDJSON:
 
 ```bash
 make indexer

@@ -3,8 +3,9 @@
 A terminal music player for an existing osu!(lazer) library. Browse and search your
 music, stream playback, shuffle, repeat, and optionally connect Discord or Last.fm.
 
-**Close lazer before indexing or refreshing.** The player reads your library without
-modifying the original database or content files. Playback never starts automatically.
+> [!IMPORTANT]
+> Close lazer before indexing or refreshing. The player never modifies the original
+> database or content files, and playback never starts automatically.
 
 ## Run
 
@@ -15,8 +16,9 @@ chmod +x osu-player-x86_64.AppImage
 ./osu-player-x86_64.AppImage tui
 ```
 
-Requires Linux x86-64, glibc 2.36+, a UTF-8 locale, and working host audio. No separate
-.NET installation is needed. Without FUSE, use `--appimage-extract-and-run tui`.
+- **Requires:** Linux x86-64, glibc 2.36+, a UTF-8 locale, and working host audio.
+- **Self-contained:** no separate .NET installation needed.
+- **Without FUSE:** use `--appimage-extract-and-run tui`.
 
 ### Arch Linux
 
@@ -25,9 +27,11 @@ sudo pacman -U artifacts/arch/osu-music-player-0.4.0-1-x86_64.pkg.tar.zst
 osu-player tui
 ```
 
-The native package uses system libraries and the .NET 10 runtime. Use an up-to-date
-Arch system. Current packages are local, unsigned builds, not published downloads;
-public distribution is pending licensing review.
+- **Requires:** an up-to-date Arch system, system libraries, and the .NET 10 runtime.
+- **Release status:** local, unsigned builds—not published downloads. Public
+  distribution is pending licensing review.
+
+### Library location
 
 The default library is `~/.local/share/osu`. For another location:
 
@@ -53,10 +57,10 @@ osu-player tui --osu-dir /path/to/osu-data
 
 ## Build from source
 
-Install a C++20 compiler, Make, pkg-config, FFmpeg development libraries, SDL2,
-ncursesw, json-c, libcurl 7.85+, OpenSSL libcrypto, and CA certificates. Directory
-indexing also needs the .NET 10 SDK. Tests require Python 3.11+, the OpenSSL CLI,
-and FFmpeg with MP3/Vorbis encoders.
+- **Build:** C++20 compiler, Make, pkg-config, FFmpeg development libraries, SDL2,
+  ncursesw, json-c, libcurl 7.85+, OpenSSL libcrypto, and CA certificates.
+- **Directory indexing:** .NET 10 SDK.
+- **Tests:** Python 3.11+, OpenSSL CLI, and FFmpeg with MP3/Vorbis encoders.
 
 ```bash
 make
