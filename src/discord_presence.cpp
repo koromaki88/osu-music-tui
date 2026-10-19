@@ -2,6 +2,7 @@
 
 #include <json-c/json.h>
 #include <sys/socket.h>
+#include <sys/eventfd.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <poll.h>
@@ -268,19 +269,36 @@ struct DiscordPresence::Impl {
     std::optional<PlaybackSnapshot> playback;
     Steady::time_point sampled_at{};
     std::string state{"off"};
+    Descriptor wake;
     std::jthread worker; // Last member: joins before shared state is destroyed.
 
     explicit Impl(DiscordOptions value) : options{std::move(value)}
     {
         if (options.update_interval <= 0ms || options.io_timeout <= 0ms || options.reconnect_min <= 0ms ||
             options.reconnect_max < options.reconnect_min) { throw std::invalid_argument{"invalid Discord worker intervals"}; }
+        wake.value = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+        if (wake.value < 0) { throw std::runtime_error{"cannot create Discord wake descriptor"}; }
         worker = std::jthread{[this](const std::stop_token stop) { run(stop); }};
     }
 
     ~Impl()
     {
         worker.request_stop();
+        notify();
         condition.notify_all();
+    }
+
+    void notify() noexcept
+    {
+        const std::uint64_t value = 1;
+        // A saturated counter is already readable, so EAGAIN loses no wakeup.
+        while (write(wake.value, &value, sizeof(value)) < 0 && errno == EINTR) { }
+    }
+
+    void drain_wake() noexcept
+    {
+        std::uint64_t value{};
+        while (read(wake.value, &value, sizeof(value)) < 0 && errno == EINTR) { }
     }
 
     bool cancelled(const std::stop_token stop, const std::uint64_t expected)
@@ -362,15 +380,29 @@ struct DiscordPresence::Impl {
                 std::optional<PlaybackSnapshot> latest;
                 Steady::time_point sampled;
                 std::uint64_t latest_revision{};
+                bool sending{};
+                int timeout = -1;
                 {
                     const std::lock_guard lock{mutex};
-                    latest = playback;
-                    sampled = sampled_at;
                     latest_revision = revision;
+                    if (latest_revision != sent_revision) {
+                        const auto now = Steady::now();
+                        sending = !playback || now >= next_send;
+                        if (sending) {
+                            // Copy metadata only when an actual RPC is due, never
+                            // on progress updates or idle socket notifications.
+                            latest = playback;
+                            sampled = sampled_at;
+                        } else {
+                            const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(next_send - now);
+                            timeout = static_cast<int>(std::min(remaining.count(),
+                                static_cast<std::chrono::milliseconds::rep>(std::numeric_limits<int>::max())));
+                        }
+                    }
                 }
                 // Clear immediately on stop, rather than leaking stale listening
                 // activity for the normal update throttle interval.
-                if (latest_revision != sent_revision && (!latest || Steady::now() >= next_send)) {
+                if (sending) {
                     if (latest && latest->playing && Steady::now() >= sampled) {
                         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(Steady::now() - sampled);
                         // Positions from files are bounded before arithmetic/rendering.
@@ -390,14 +422,20 @@ struct DiscordPresence::Impl {
                     sent_revision = latest_revision;
                     healthy = true;
                     next_send = Steady::now() + options.update_interval;
+                    // State may have changed while awaiting the ACK. Recheck it
+                    // before deciding whether to block or wait for the throttle.
+                    continue;
                 }
-                pollfd item{descriptor, POLLIN, 0};
-                const int result = poll(&item, 1, 25);
+                // No idle timer: wake only for IPC, configuration/shutdown, a
+                // presence change, or the pending update's throttle deadline.
+                std::array<pollfd, 2> items{{{descriptor, POLLIN, 0}, {wake.value, POLLIN, 0}}};
+                const int result = poll(items.data(), items.size(), timeout);
                 if (result < 0 && errno == EINTR) { continue; }
-                if (result < 0 || (item.revents & (POLLERR | POLLHUP | POLLNVAL))) {
+                if (result < 0 || (items[0].revents & (POLLERR | POLLHUP | POLLNVAL))) {
                     throw std::runtime_error{"Discord disconnected"};
                 }
-                if (item.revents & POLLIN) { (void)receive(descriptor, Steady::now() + options.io_timeout, cancel); }
+                if (items[1].revents & POLLIN) { drain_wake(); }
+                if (items[0].revents & POLLIN) { (void)receive(descriptor, Steady::now() + options.io_timeout, cancel); }
             }
         } catch (...) {
             clear(descriptor);
@@ -475,6 +513,7 @@ void DiscordPresence::configure(const bool enabled, std::string application_id)
     impl_->state = !enabled ? "off" : impl_->application_id.empty() ? "needs app ID" :
         !valid_discord_application_id(impl_->application_id) ? "invalid app ID" : "connecting";
     impl_->condition.notify_all();
+    impl_->notify();
 }
 
 void DiscordPresence::publish(const PlaybackEvents& events, const std::optional<PlaybackSnapshot>& playback)
@@ -483,8 +522,16 @@ void DiscordPresence::publish(const PlaybackEvents& events, const std::optional<
         return event.type == PlaybackEventType::seeked;
     });
     const std::lock_guard lock{impl_->mutex};
-    if (force || !same_presence(impl_->playback, playback)) { ++impl_->revision; }
-    impl_->playback = playback;
+    const bool changed = force || !same_presence(impl_->playback, playback);
+    if (changed) {
+        ++impl_->revision;
+        impl_->playback = playback;
+        if (impl_->enabled) { impl_->notify(); }
+    } else if (playback) {
+        // Only position is needed to anchor a future send. Do not repeatedly
+        // copy owned metadata strings or unrelated listening-accounting state.
+        impl_->playback->position = playback->position;
+    }
     impl_->sampled_at = Steady::now();
 }
 

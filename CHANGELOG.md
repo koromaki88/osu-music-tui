@@ -7,6 +7,8 @@
 - Added optional TUI Discord Rich Presence with a saved `d` toggle, configurable
   application ID, background Linux IPC, playback timers, pause/stop handling,
   reconnect/backoff, and fake-socket/PTY tests. Defaults off; live Discord unverified.
+- Removed periodic idle Discord worker polling and redundant progress metadata copies;
+  state/socket notifications now wake the worker only when needed.
 - Replaced the application icon's self-intersecting note with a centered eighth note.
 
 ## 0.2.0

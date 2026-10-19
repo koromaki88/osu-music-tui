@@ -128,6 +128,25 @@ def no_connection(server, duration=0.12):
     assert not select.select([server.socket], [], [], duration)[0], "disabled/invalid client connected"
 
 
+def idle_sample(driver, client, duration=0.6):
+    """Linux per-thread counters: distinguish real idle blocking from timer polling."""
+    def counters():
+        result = {}
+        for task in Path(f"/proc/{driver.process.pid}/task").iterdir():
+            status = dict(line.split(":", 1) for line in (task / "status").read_text().splitlines())
+            result[task.name] = (int(status["voluntary_ctxt_switches"]),
+                                 int((task / "schedstat").read_text().split()[0]))
+        return result
+
+    before = counters()
+    no_frame(client, duration)
+    after = counters()
+    wakeups = sum(after[task][0] - values[0] for task, values in before.items())
+    cpu_ms = sum(after[task][1] - values[1] for task, values in before.items()) / 1_000_000
+    print(f"Discord idle probe: {wakeups} voluntary context switches, {cpu_ms:.3f} ms CPU over {duration}s")
+    return wakeups
+
+
 def worker_tests(binary, root):
     path = root / "ipc"
     with Server(path) as server, Driver(binary, path) as driver:
@@ -149,6 +168,7 @@ def worker_tests(binary, root):
             send(client, 3, b"idle-ping", fragmented=True)
             assert frame(client) == (4, b"idle-ping")
             no_frame(client, 0.35)  # Idle ping/pong must not trigger an ACK/READY timeout.
+            assert idle_sample(driver, client) < 8, "idle worker must block, not wake every 25 ms"
             driver.command("pause")
             paused = activity(client)
             assert paused["state"].startswith("Paused") and "timestamps" not in paused
@@ -158,6 +178,11 @@ def worker_tests(binary, root):
             resumed = activity(client)
             assert "timestamps" in resumed and resumed["state"] == "作曲家"
             assert abs(resumed["timestamps"]["start"] - (time.time() - 50)) < 3, "seek/resume must re-anchor the timer"
+            driver.command("seek")
+            for _ in range(3):
+                driver.command("progress")
+            coalesced = activity(client)
+            assert abs(coalesced["timestamps"]["start"] - (time.time() - 53)) < 2, "throttled send must use the newest scalar position"
             driver.command("overflow")
             assert activity(client)["details"] == "日本語"
             driver.command("stop")

@@ -378,7 +378,11 @@ Errors use fixed local text, never untrusted peer messages over ncurses or stder
 New sessions, metadata/duration changes, pause/resume, seeks, and journal overflow
 trigger coalesced updates. Plain progress does not generate RPC traffic; timestamps
 advance on Discord. The default five-second throttle uses the latest position when
-sending. Stop clears immediately; disable/exit attempts a bounded best-effort clear
+sending. A Linux `eventfd` wakes the connected worker for state/configuration changes
+or shutdown; otherwise it blocks on the IPC socket, with a timer only when a throttled
+update is pending. Routine progress updates refresh only position/sample time; owned
+metadata is copied only on meaningful state changes and actual sends. Stop clears
+immediately; disable/exit attempts a bounded best-effort clear
 and closes the socket. An in-flight request is interruptible at short poll intervals;
 destruction joins the worker. Abrupt process termination cannot guarantee a clear.
 
@@ -386,12 +390,19 @@ destruction joins the worker. Abrupt process termination cannot guarantee a clea
 worker harness. `tests/discord_integration.py` drives isolated fake sockets and a PTY,
 covering opt-in/invalid IDs, Unicode/privacy, ping/pong, fragmented/malformed/oversized
 frames, ACK/READY timeouts, reconnect, pause/seek/stop, normal shutdown, saved toggles,
-malformed config preservation, and playback responsiveness. Both run in `make test`
+malformed config preservation, playback responsiveness, and a `/proc`-based idle-worker
+wakeup regression check. Both run in `make test`
 and are registered in CMake. The full native and ASan/UBSan suites pass; logs are
 `artifacts/tests.log` and `artifacts/sanitizers/tests.log`. Regular binaries were rebuilt
 and retested afterward. CMake/Ninja remain unavailable, so CMake is unverified.
 Live Discord rendering remains unverified; no packages were rebuilt for this step.
 Protocol reference: [Discord RPC](https://docs.discord.com/developers/topics/rpc).
+
+The idle-worker optimization's isolated two-second fake-server probe measured 79
+voluntary context switches / 4.193 ms CPU before, versus 1 / 0.025 ms after. Logs:
+`artifacts/discord-idle-before.log` and `artifacts/discord-idle-after.log`. These are
+worker-harness measurements, not whole-player CPU or memory guarantees. Thread and
+allocator retained memory may remain even after idle wakeups and copies are removed.
 
 ### Next steps (not implemented)
 
