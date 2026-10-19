@@ -12,6 +12,8 @@ struct Settings {
     bool shuffle{};
     RepeatMode repeat{RepeatMode::off};
     std::string search;
+    bool discord_enabled{};
+    std::string discord_application_id;
     bool operator==(const Settings&) const = default;
 };
 

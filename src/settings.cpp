@@ -81,6 +81,21 @@ Settings load_settings(const std::filesystem::path& path)
         settings.search.assign(json_object_get_string(value), static_cast<std::size_t>(json_object_get_string_len(value)));
         if (settings.search.size() > 256 || settings.search.find('\0') != std::string::npos) { invalid(); }
     }
+    json_object* discord{};
+    if (json_object_object_get_ex(root.get(), "discord", &discord)) {
+        if (!json_object_is_type(discord, json_type_object)) { invalid(); }
+        json_object* value{};
+        if (json_object_object_get_ex(discord, "enabled", &value)) {
+            if (!json_object_is_type(value, json_type_boolean)) { invalid(); }
+            settings.discord_enabled = json_object_get_boolean(value) != 0;
+        }
+        if (json_object_object_get_ex(discord, "application_id", &value)) {
+            if (!json_object_is_type(value, json_type_string)) { invalid(); }
+            settings.discord_application_id.assign(json_object_get_string(value),
+                static_cast<std::size_t>(json_object_get_string_len(value)));
+            if (settings.discord_application_id.size() > 32 || settings.discord_application_id.find('\0') != std::string::npos) { invalid(); }
+        }
+    }
     return settings;
 }
 
@@ -93,6 +108,10 @@ void save_settings(const std::filesystem::path& path, const Settings& settings)
     json_object_object_add(root.get(), "repeat", json_object_new_string(settings.repeat == RepeatMode::one ? "one" :
         settings.repeat == RepeatMode::all ? "all" : "off"));
     json_object_object_add(root.get(), "search", json_object_new_string(settings.search.c_str()));
+    auto* discord = json_object_new_object();
+    json_object_object_add(root.get(), "discord", discord);
+    json_object_object_add(discord, "enabled", json_object_new_boolean(settings.discord_enabled));
+    json_object_object_add(discord, "application_id", json_object_new_string(settings.discord_application_id.c_str()));
     const std::string data = std::string{json_object_to_json_string_ext(root.get(), JSON_C_TO_STRING_PRETTY)} + '\n';
     std::filesystem::create_directories(path.parent_path());
     std::string pattern = (path.parent_path() / ".settings-XXXXXX").string();

@@ -42,6 +42,7 @@ add_library(osu_player_core
     src/track.cpp
     src/player_controller.cpp
     src/playback_events.cpp
+    src/discord_presence.cpp
     src/library_view.cpp
     src/terminal_text.cpp
     src/library_refresh.cpp
@@ -94,6 +95,15 @@ if(BUILD_TESTING)
     osu_player_set_warnings(playback-events-tests)
     osu_player_enable_sanitizers(playback-events-tests)
     add_test(NAME playback-events COMMAND playback-events-tests)
+
+    add_executable(discord-presence-tests tests/discord_presence_test.cpp)
+    target_link_libraries(discord-presence-tests PRIVATE osu_player_core PkgConfig::JSON_C)
+    osu_player_set_warnings(discord-presence-tests)
+    osu_player_enable_sanitizers(discord-presence-tests)
+    add_test(NAME discord-presence COMMAND discord-presence-tests)
+    add_test(NAME discord-ipc COMMAND Python3::Interpreter
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/discord_integration.py
+        --test-binary $<TARGET_FILE:discord-presence-tests> --player-binary $<TARGET_FILE:osu-player>)
 
     add_executable(tui-model-tests tests/tui_model_test.cpp)
     target_link_libraries(tui-model-tests PRIVATE osu_player_core)

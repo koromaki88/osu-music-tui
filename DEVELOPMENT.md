@@ -292,14 +292,16 @@ artist/title. Inspect the synthetic fixture without touching real game data:
 
 Step 1 is implemented in `playback_events.hpp/.cpp` and `PlayerController`. It performs
 no network/socket/disk operations and does not connect to Discord or submit scrobbles.
-Existing 0.2.0 packages do not include this post-release foundation or later icon edits.
+The separate Discord worker described below now consumes the foundation in the TUI.
+Existing 0.2.0 packages do not include these post-release changes or later icon edits.
 
 ### Event contract
 
 - `PlayerController::take_playback_events()` drains a value-owned batch in occurrence
-  order. A future control-thread dispatcher should drain once per loop and fan out copies
-  to integration-owned workers; neither networking nor consumer callbacks belong inside
-  the controller. Event metadata intentionally excludes filesystem paths and filenames.
+  order. The TUI drains once per loop and publishes an owned current snapshot to Discord;
+  a future Last.fm consumer must receive the same batch rather than draining it again.
+  Neither networking nor consumer callbacks belong inside the controller. Event metadata
+  intentionally excludes filesystem paths and filenames.
 - Events cover successful start, progress, pause/resume, successful seek, metadata change,
   timing eligibility, and session end with an explicit reason (EOF, skip, replacement,
   stop, decoder/output failure, refresh removal, or frontend shutdown).
@@ -352,14 +354,51 @@ and existing audio/TUI/refresh integration tests. Logs are `artifacts/tests.log`
 `artifacts/sanitizers/tests.log`. Regular development binaries were restored afterward.
 CMake registration is updated but remains unverified in this environment.
 
+### Discord presence
+
+`discord_presence.hpp/.cpp` owns a `std::jthread` for Linux Unix-domain IPC. Configuration,
+status, and latest snapshot use a short-held mutex; no socket operations run on the
+control thread. The mailbox retains one snapshot, not a growing work queue. Presence
+uses structured Unicode metadata and optional official beatmap links, not paths/hashes
+or internal IDs. Metadata is UTF-8 sanitized and byte-bounded before transmission.
+
+Settings version 1 accepts an optional `discord` object with `enabled` and
+`application_id`; older files default off. There is no bundled project application ID.
+Users supply their own application ID, optionally with the `osu_player` image asset.
+No OAuth, bot/account token, client secret, HTTP request, or Discord SDK is involved.
+Only the TUI currently configures/publishes presence; CLI playback is unchanged.
+
+The worker implements little-endian bounded frames, READY, matching request ACKs,
+ping/pong, partial nonblocking I/O, absolute deadlines, same-UID socket/peer checks,
+and bounded exponential reconnect backoff. It discovers `discord-ipc-0` through `-9`
+under Discord's documented environment roots and `/tmp`, or uses the absolute
+`OSU_PLAYER_DISCORD_SOCKET` override. Explicit test paths never discover real clients.
+Errors use fixed local text, never untrusted peer messages over ncurses or stderr.
+
+New sessions, metadata/duration changes, pause/resume, seeks, and journal overflow
+trigger coalesced updates. Plain progress does not generate RPC traffic; timestamps
+advance on Discord. The default five-second throttle uses the latest position when
+sending. Stop clears immediately; disable/exit attempts a bounded best-effort clear
+and closes the socket. An in-flight request is interruptible at short poll intervals;
+destruction joins the worker. Abrupt process termination cannot guarantee a clear.
+
+`tests/discord_presence_test.cpp` checks pure rendering and provides a line-controlled
+worker harness. `tests/discord_integration.py` drives isolated fake sockets and a PTY,
+covering opt-in/invalid IDs, Unicode/privacy, ping/pong, fragmented/malformed/oversized
+frames, ACK/READY timeouts, reconnect, pause/seek/stop, normal shutdown, saved toggles,
+malformed config preservation, and playback responsiveness. Both run in `make test`
+and are registered in CMake. The full native and ASan/UBSan suites pass; logs are
+`artifacts/tests.log` and `artifacts/sanitizers/tests.log`. Regular binaries were rebuilt
+and retested afterward. CMake/Ninja remain unavailable, so CMake is unverified.
+Live Discord rendering remains unverified; no packages were rebuilt for this step.
+Protocol reference: [Discord RPC](https://docs.discord.com/developers/topics/rpc).
+
 ### Next steps (not implemented)
 
-1. Discord IPC worker, optional saved toggle, presence rendering, throttling, reconnect,
-   and fake-socket tests. No Discord account token or bot features are planned.
-2. Last.fm browser authorization, securely stored session credentials, and Now Playing.
-3. Durable account-associated eligible-scrobble queue, HTTPS transport, API response
+1. Last.fm browser authorization, securely stored session credentials, and Now Playing.
+2. Durable account-associated eligible-scrobble queue, HTTPS transport, API response
    handling, bounded retries/backoff, and explicit disconnect/queue controls.
 
 Both integrations should default off. Keep consumer/network failures isolated from
 playback and redact credentials from diagnostics. No real service requests or package
-rebuilds are part of step 1.
+rebuilds are part of routine implementation validation.

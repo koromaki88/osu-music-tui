@@ -4,6 +4,7 @@
 #include "osu_player/library_view.hpp"
 #include "osu_player/player_controller.hpp"
 #include "osu_player/settings.hpp"
+#include "osu_player/discord_presence.hpp"
 #include "osu_player/terminal_text.hpp"
 
 #include <curses.h>
@@ -154,7 +155,7 @@ void draw(const int row, const int column, const std::string_view text, const in
 }
 
 void render(const PlayerController& player, const LibraryView& view, const bool searching,
-            const std::string& notice, const bool colors, const bool refreshing)
+            const std::string& notice, const bool colors, const bool refreshing, const std::string& discord_status)
 {
     int rows{};
     int columns{};
@@ -168,7 +169,7 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
         return;
     }
 
-    draw(0, 0, "osu! music player", columns, A_BOLD, colors ? 1 : 0);
+    draw(0, 0, "osu! music player | Discord: " + discord_status, columns, A_BOLD, colors ? 1 : 0);
     const std::string summary = "Library: " + std::to_string(player.library().tracks().size()) +
         " | Matches: " + std::to_string(view.matches().size()) +
         " | Shuffle: " + (player.shuffle() ? "on" : "off") +
@@ -213,7 +214,7 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
          std::string(static_cast<std::size_t>(bar_width) - filled, '-') + "]", columns);
     draw(rows - 3, 0, notice, columns, A_NORMAL, colors ? 3 : 0);
     draw(rows - 2, 0, "j/k move  Enter play  Space pause  n/p next/prev  / search  q quit", columns);
-    draw(rows - 1, 0, "Left/Right seek  +/- volume  s shuffle  R repeat  x stop  r refresh", columns);
+    draw(rows - 1, 0, "Left/Right seek  +/- volume  s shuffle  R repeat  x stop  r refresh  d Discord", columns);
     wnoutrefresh(stdscr);
     doupdate();
 }
@@ -319,6 +320,15 @@ int run_tui_command(RefreshOptions options)
     player.set_shuffle(saved_settings.shuffle);
     player.set_repeat(saved_settings.repeat);
     view.set_query(saved_settings.search);
+    bool discord_enabled = saved_settings.discord_enabled;
+    const std::string discord_application_id = saved_settings.discord_application_id;
+    std::unique_ptr<DiscordPresence> discord;
+    try {
+        discord = std::make_unique<DiscordPresence>();
+        discord->configure(discord_enabled, discord_application_id);
+    } catch (const std::exception&) {
+        // Optional integration resource failures must not prevent audio/UI startup.
+    }
     const bool export_mode = options.export_file.has_value();
     LibraryRefresh refresh{std::move(options)};
     refresh.start(true);
@@ -353,7 +363,7 @@ int run_tui_command(RefreshOptions options)
         const auto now = std::chrono::steady_clock::now();
         if (now >= next_frame) {
             render(player, view, searching, settings_warning.empty() ? notice : settings_warning,
-                   terminal.colors, refresh.busy());
+                   terminal.colors, refresh.busy(), discord ? discord->status() : "unavailable");
             next_frame = now + std::chrono::milliseconds{100};
         }
         wint_t key{};
@@ -364,6 +374,9 @@ int run_tui_command(RefreshOptions options)
                     clearok(stdscr, true);
                 } else if (searching) {
                     search_key(key, result == KEY_CODE_YES, view, searching, saved_query);
+                } else if (result != KEY_CODE_YES && key == 'd') {
+                    discord_enabled = !discord_enabled;
+                    if (discord) { discord->configure(discord_enabled, discord_application_id); }
                 } else if (result != KEY_CODE_YES && key == 'r') {
                     notice = refresh.start() ? (export_mode ? "Reloading library in background."
                         : "Indexing in background; lazer must be closed.") : "Refresh already running.";
@@ -379,8 +392,10 @@ int run_tui_command(RefreshOptions options)
             next_frame = std::chrono::steady_clock::now();
         }
         const auto errors = player.take_errors();
+        const auto playback_events = player.take_playback_events();
+        if (discord) { discord->publish(playback_events, player.playback_snapshot()); }
         const Settings current_settings{player.volume(), player.shuffle(), player.repeat(),
-                                        searching ? saved_query : view.query()};
+                                        searching ? saved_query : view.query(), discord_enabled, discord_application_id};
         if (settings_writable && current_settings != saved_settings) {
             try {
                 save_settings(*config_path, current_settings);
@@ -402,6 +417,7 @@ int run_tui_command(RefreshOptions options)
         }
     }
     player.shutdown();
+    if (discord) { discord->publish(player.take_playback_events(), player.playback_snapshot()); }
     return interrupted ? 128 + interrupted : 0;
 }
 

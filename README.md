@@ -227,6 +227,7 @@ continues. Monochrome terminals work without colors.
 | `R` | Cycle repeat off → one → all |
 | `x` | Stop and rewind |
 | `r` | Refresh in the background (reload the export, or rerun the indexer) |
+| `d` | Toggle Discord Rich Presence (requires an application ID) |
 | `/` | Edit the search filter |
 | Esc | Clear the filter outside search mode |
 | `q` | Quit outside search mode |
@@ -244,8 +245,8 @@ settings. Mouse support and indexing while lazer is running are not implemented.
 
 ### Saved preferences
 
-The TUI automatically saves volume, shuffle, repeat mode, and the last applied search
-filter to `$XDG_CONFIG_HOME/osu-player/settings.json`, or
+The TUI automatically saves volume, shuffle, repeat mode, the Discord toggle, and the
+last applied search filter to `$XDG_CONFIG_HOME/osu-player/settings.json`, or
 `$HOME/.config/osu-player/settings.json` when the XDG path is unset, empty, or relative.
 Preferences are shared across libraries and builds (development, AppImage, native package).
 Playback never starts automatically; the current track, position, and queue are not restored.
@@ -260,6 +261,37 @@ instances use last-writer-wins rather than merging preferences.
 To reset preferences, close all player instances and remove the settings file. No library
 cache or osu! content needs to be deleted. Only the TUI saves these preferences; CLI
 playback commands keep their existing behavior.
+
+### Optional Discord Rich Presence (development builds)
+
+Discord presence is **off by default** and currently available only in the TUI.
+With the player closed, add a `discord` object to your existing settings file,
+keeping its other fields (a new file also needs `"version": 1`):
+
+```json
+"discord": {
+  "enabled": false,
+  "application_id": "YOUR_DISCORD_APPLICATION_ID"
+}
+```
+
+Create your own application in the [Discord Developer Portal](https://discord.com/developers/applications)
+and use its **Application ID**, not a bot token or client secret. Optionally upload a
+Rich Presence image named `osu_player`. No project-wide application ID is bundled yet.
+Start the desktop Discord client, run the TUI, then press `d` to enable presence.
+The toggle is saved; an absent/invalid ID prevents any connection attempt.
+
+Presence shares the title, artist, playback timer, paused state, and an official beatmap
+link when available. Local paths, hashes, and library/session IDs are not sent.
+Updates run in a background local IPC worker, coalesced to at most one normal update
+per five seconds; stopping clears activity promptly. Disabling or exiting attempts to
+clear presence before disconnecting. Connection failures do not stop playback.
+
+The title bar reports connection status. Enable activity sharing in Discord if needed.
+Sandboxed Discord installations may need an accessible IPC socket; an absolute
+`OSU_PLAYER_DISCORD_SOCKET` path overrides normal discovery. Fake-socket tests pass,
+but live Discord rendering has not been verified. Existing 0.2.0 packages do not contain
+this feature. Last.fm authorization and scrobbling are not implemented yet.
 
 ### Background indexing and cache
 

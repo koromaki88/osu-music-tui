@@ -3,7 +3,10 @@
 ## Unreleased
 
 - Added the shared playback-event and listening-time foundation for future Discord
-  Rich Presence and Last.fm scrobbling. No service connections or submissions yet.
+  Rich Presence and Last.fm scrobbling. No Last.fm submissions yet.
+- Added optional TUI Discord Rich Presence with a saved `d` toggle, configurable
+  application ID, background Linux IPC, playback timers, pause/stop handling,
+  reconnect/backoff, and fake-socket/PTY tests. Defaults off; live Discord unverified.
 - Replaced the application icon's self-intersecting note with a centered eighth note.
 
 ## 0.2.0
