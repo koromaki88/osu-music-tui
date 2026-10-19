@@ -1,12 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Added the shared playback-event and listening-time foundation for future Discord
   Rich Presence and Last.fm scrobbling. No Last.fm submissions yet.
 - Added optional TUI Discord Rich Presence with a saved `d` toggle, configurable
   application ID, background Linux IPC, playback timers, pause/stop handling,
-  reconnect/backoff, and fake-socket/PTY tests. Defaults off; live Discord unverified.
+  reconnect/backoff, and fake-socket/PTY tests. Defaults off; live display user-verified.
 - Removed periodic idle Discord worker polling and redundant progress metadata copies;
   state/socket notifications now wake the worker only when needed.
 - Added an in-app Discord Application ID prompt when enabling without a valid saved
@@ -17,6 +17,12 @@
 - Discord presence uses the song title as its activity name and keeps the artist line,
   omitting the extra song-title line; the bottom cover label reads `osu! player`.
 - Replaced the application icon's self-intersecting note with a centered eighth note.
+
+### Release scope
+- Last.fm authorization/submission and durable scrobble storage are not included.
+- Local unsigned packages only; public distribution still requires application-license
+  selection and dependency/source-compliance review. No installation or publication
+  is implied by local package validation.
 
 ## 0.2.0
 

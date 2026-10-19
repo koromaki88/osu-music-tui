@@ -66,7 +66,7 @@ is needed to run it.
 Install the generated local package, then close lazer and start the player:
 
 ```bash
-sudo pacman -U artifacts/arch/osu-music-player-0.2.0-1-x86_64.pkg.tar.zst
+sudo pacman -U artifacts/arch/osu-music-player-0.3.0-1-x86_64.pkg.tar.zst
 osu-player tui
 ```
 
@@ -262,7 +262,7 @@ To reset preferences, close all player instances and remove the settings file. N
 cache or osu! content needs to be deleted. Only the TUI saves these preferences; CLI
 playback commands keep their existing behavior.
 
-### Optional Discord Rich Presence (development builds)
+### Optional Discord Rich Presence (0.3.0+)
 
 Discord presence is **off by default** and currently available only in the TUI.
 Start the desktop Discord client, run the TUI, and press `d`. If no valid Application ID
@@ -298,8 +298,9 @@ clear presence before disconnecting. Connection failures do not stop playback.
 The title bar reports connection status. Enable activity sharing in Discord if needed.
 Sandboxed Discord installations may need an accessible IPC socket; an absolute
 `OSU_PLAYER_DISCORD_SOCKET` path overrides normal discovery. Fake-socket tests pass,
-but live Discord rendering has not been verified. Existing 0.2.0 packages do not contain
-this feature. Last.fm authorization and scrobbling are not implemented yet.
+and live Discord rendering has been reported working by the user. Version 0.3.0
+includes this feature; older 0.2.0 packages do not. Last.fm authorization and scrobbling
+are not implemented yet.
 
 ### Background indexing and cache
 

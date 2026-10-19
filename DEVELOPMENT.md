@@ -45,6 +45,36 @@ of old artifacts, or cleanup of unrelated Docker data. Those require separate ap
 Public distribution remains blocked on application-license selection and dependency/
 source-compliance review; see [packaging/THIRD_PARTY.md](packaging/THIRD_PARTY.md).
 
+### Local 0.3.0 release validation
+
+Both formats were rebuilt and validated for the Discord milestone:
+
+- `make test` and `make test-indexer` passed with synthetic fixtures.
+- `make test-appimage` passed: version 0.3.0, x86-64/glibc 2.36 baseline,
+  relocation/extract-and-run, no installed .NET, minimal-container smoke test,
+  synthetic indexing, WAV/MP3/Ogg dummy playback, PTY/settings, and packaged Discord
+  setup/persistence/fake IPC. Output: `artifacts/dist/osu-player-x86_64.AppImage`
+  (about 100.2 MiB), with adjacent checksum and manifest; SHA-256 verified.
+- `DOTNET_ROOT="$PWD/.tools/dotnet10" make test-arch-package ARCH_PACKAGE_FLAGS=--nodeps`
+  passed: build-time native/synthetic tests plus extracted-package metadata/ABI,
+  packaged indexer, default path, dummy playback/PTY/settings, and Discord setup/fake
+  IPC. Output: `artifacts/arch/osu-music-player-0.3.0-1-x86_64.pkg.tar.zst`
+  (about 4.4 MiB), with verified adjacent SHA-256. Host pacman .NET packages were
+  absent: dependency checks were skipped and installation/dependency resolution
+  remain untested.
+- Logs: `artifacts/tests.log`, `artifacts/test-indexer.log`,
+  `artifacts/test-appimage.log`, `artifacts/arch-package.log`, and
+  `artifacts/test-arch-package.log`.
+- The previous AppImage/checksum/manifest were preserved and checksum-verified under
+  `artifacts/releases/0.2.0/appimage/`; older versioned Arch artifacts were retained.
+
+No game launch, real-library scan, installation, publication, commit, or tag was part
+of this validation. FUSE mounting remains untested; extraction/run was validated.
+Live Discord display was reported working by the user; packaged regression tests
+use isolated fake sockets only. Last.fm is not included. These are local unsigned
+packages, not public-distribution approval. This validation record was added after
+packaging and is not embedded in the already-built packages.
+
 ## Test commands and logs
 
 | Target | Scope | Saved log |

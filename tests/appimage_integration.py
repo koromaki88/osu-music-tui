@@ -13,6 +13,7 @@ import wave
 from unittest.mock import patch
 
 from tui_integration import Session, exercise_settings, exercise_ui, write_library
+from discord_integration import tui_tests as exercise_discord
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -68,7 +69,7 @@ def main():
             appdir = moved / "squashfs-root"
             launcher = str(appdir / "AppRun")
             manifest = json.loads((appdir / "usr/share/osu-player/build-manifest.json").read_text())
-            assert manifest["version"] == "0.2.0"
+            assert manifest["version"] == "0.3.0"
             runtime = json.loads((appdir / "usr/lib/osu-player/indexer/osu-indexer.runtimeconfig.json").read_text())
             assert "framework" not in runtime["runtimeOptions"], "indexer must be self-contained"
             assert runtime["runtimeOptions"]["tfm"] == "net10.0"
@@ -94,6 +95,9 @@ def main():
             write_library(exported, records)
             exercise_ui(launcher, exported)
             exercise_settings(launcher, exported, root)
+            discord_root = root / "discord"
+            discord_root.mkdir()
+            exercise_discord(launcher, discord_root)
             for codec, container in (("libmp3lame", "mp3"), ("libvorbis", "ogg")):
                 encoded = root / f"generated.{container}"
                 subprocess.run([ffmpeg, "-nostdin", "-v", "error", "-i", str(audio),
@@ -108,7 +112,7 @@ def main():
                                         text=True, capture_output=True, timeout=15)
                 assert result.returncode == 0 and "volume: 0.2" in result.stdout, result.stderr
         assert fingerprint(source) == before, "packaged adapter changed synthetic source files"
-    print("AppImage tests passed: version, relocation, synthetic Realm indexing, no installed dotnet, WAV/MP3/Ogg dummy playback, PTY controls, settings persistence")
+    print("AppImage tests passed: version, relocation, synthetic Realm indexing, no installed dotnet, WAV/MP3/Ogg dummy playback, PTY controls, settings persistence, Discord setup/fake IPC")
 
 
 if __name__ == "__main__":
