@@ -9,8 +9,8 @@
 
 ## AppImage
 
-- **Requires:** Make, Python 3.11+, and a running local Docker engine (or Podman).
-- **Not required on the host:** native compiler or .NET installation.
+Requires Make, Python 3.11+, and a running local Docker engine (or Podman). No host
+native compiler or .NET installation is needed.
 
 ```bash
 make test-appimage
@@ -28,17 +28,17 @@ make test-appimage CONTAINER_ENGINE=podman
 | appimagetool | 1.9.1, checksum-verified |
 | Target | x86-64 / glibc 2.36 |
 
-- **First build:** downloads the base, SDK, distro dependencies, NuGet packages,
-  and appimagetool. Update pins deliberately for security releases.
-- **Host-provided:** glibc/loader and audio services/drivers are not bundled.
-- **Optional tracing:** .NET LTTng is omitted.
+The first build downloads the base, SDK, distro dependencies, NuGet packages, and
+appimagetool. Update pins deliberately for security releases. glibc/loader and audio
+services/drivers are host-provided, not bundled. Optional .NET LTTng tracing is omitted.
 
-- **Source isolation:** allowlisted read-only snapshot excluding game, library,
-  SDKs, caches, and artifacts. Only Dockerfile/SDK installer enter toolchain layers.
-- **Execution:** compilation, restores, and tests run in disposable containers.
-- **Package checks:** relocation, no installed .NET/tools on PATH, synthetic indexing,
-  generated-audio/PTY playback, settings, fake Discord, and isolated Last.fm HTTPS.
-- **Minimal-image smoke test:** standalone indexing and CA fallback selection.
+Sources arrive via an allowlisted read-only snapshot excluding the game, library,
+SDKs, caches, and artifacts. Only the Dockerfile/SDK installer enter toolchain layers;
+compilation, restores, and tests run in disposable containers.
+
+Validation covers relocation, no installed .NET/tools on PATH, synthetic indexing,
+generated-audio/PTY playback, settings, fake Discord, and isolated Last.fm HTTPS.
+A minimal-image smoke test checks standalone indexing and CA fallback selection.
 
 ### Outputs
 
@@ -48,12 +48,13 @@ artifacts/dist/osu-player-x86_64.AppImage.sha256
 artifacts/dist/osu-player-x86_64.AppImage.manifest.json
 ```
 
-- **Replacement:** only after tests, checksum, and baseline checks pass. Preserve
-  previous candidates before building.
-- **Manifest/notices:** embedded native library hashes/packages and runtime/glibc versions.
-  Collected licenses alone do not satisfy redistribution obligations.
-- **CA discovery:** AppRun prefers host roots, respecting explicit `SSL_CERT_FILE`,
-  with a hashed bundled fallback. TLS verification stays enabled.
+Outputs replace prior files only after tests, checksum, and baseline checks pass.
+Preserve previous candidates before building. Embedded notices/manifest record native
+library hashes/packages and runtime/glibc versions; collected licenses alone do not
+satisfy redistribution obligations.
+
+AppRun prefers host CA roots, respecting explicit `SSL_CERT_FILE`, with a hashed
+bundled fallback. TLS verification stays enabled.
 
 ### Other build targets
 
@@ -66,12 +67,12 @@ artifacts/dist/osu-player-x86_64.AppImage.manifest.json
 
 ### Container storage
 
-- **Reusable image:** `osu-player-appimage-toolchain:net10-debian12`.
-- **Temporary data:** disposable containers remove source/build/restore/extraction
-  trees; no persistent Docker volumes. Source-only builds do not accumulate
-  compilation/package layers, but still need temporary disk space and restore time.
-- **Access:** local engine must reach the checkout; Docker uses host UID/GID,
-  Podman uses `keep-id`.
+The reusable image is `osu-player-appimage-toolchain:net10-debian12`. Disposable
+containers remove source/build/restore/extraction trees; no persistent Docker volumes
+are created. Source-only builds do not accumulate compilation/package layers, but
+still need temporary disk space and restore time.
+
+The local engine must reach the checkout. Docker uses host UID/GID; Podman uses `keep-id`.
 
 - **Inspect:** `docker system df` and `docker image ls`.
 - **Authorized cleanup:** `make clean-appimage-toolchain` removes only the project's
@@ -93,11 +94,11 @@ make test-arch-package
 
 ### Build and outputs
 
-1. Invoke `makepkg` and build an optimized player/framework-dependent linux-x64 indexer.
-2. Run native/synthetic tests. Initial restore uses the network and committed
-   `packages.arch.lock.json`.
-3. Create the package using system-provided runtime libraries/.NET. Explicit FFmpeg
-   SONAME dependencies guard against major-version mismatches; rebuild after incompatible ABI upgrades.
+The builder invokes `makepkg`, builds an optimized player/framework-dependent
+linux-x64 indexer, and runs native/synthetic tests. Initial restore uses the network
+and committed `packages.arch.lock.json`. Runtime libraries/.NET are system-provided;
+explicit FFmpeg SONAME dependencies guard against major-version mismatches. Rebuild
+after incompatible ABI upgrades.
 
 - **Artifacts:** package, checksum, allowlisted working-tree source snapshot (including
   uncommitted sources), and checksum-filled PKGBUILD under `artifacts/arch/`.

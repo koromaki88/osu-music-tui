@@ -6,8 +6,9 @@
 > These are local unsigned packages, not publication approval. Public distribution
 > remains blocked on application-license selection and dependency/source-compliance review.
 
-- **Fixtures:** synthetic libraries/audio and fake services only.
-- **Excluded:** game launch, real-library scan, installation, publication, commits, and tags.
+All package validation used synthetic libraries/audio and fake services only.
+It did not launch the game, scan a real library, install or publish packages,
+or create commits/tags.
 
 ## 0.4.0 — Last.fm
 
@@ -54,23 +55,23 @@ Final successful tests supersede those failed candidates. Preserved failure logs
 - `test-arch-package-timeout.log`
 - `arch-package-timeout.log`
 
-- **Previous AppImage/checksum/manifest:** `artifacts/releases/0.3.0/appimage/`.
-- **Older Arch packages:** retained untouched.
-- **Record timing:** maintained after builds; records may not be embedded in them.
+Previous AppImage/checksum/manifest are retained under
+`artifacts/releases/0.3.0/appimage/`; older Arch packages remain untouched.
+Validation records are maintained after builds and may not be embedded in them.
 
 ## 0.3.0 — Discord
 
-- **Result:** both formats passed native/synthetic and package validation before
-  Last.fm and later branding changes. These packages do **not** contain Last.fm.
-- **Artifacts:** AppImage about 100.2 MiB (x86-64/glibc 2.36); Arch 0.3.0-1 about 4.4 MiB.
-- **Coverage:** indexing, dummy playback/PTY/settings, and Discord setup/fake IPC.
-- **Limitations:** private SDK / `--nodeps` for Arch; installation/dependency resolution
-  and AppImage FUSE mounting untested.
+Both formats passed native/synthetic and package validation before Last.fm and later
+branding changes. These packages do **not** contain Last.fm. AppImage was about
+100.2 MiB (x86-64/glibc 2.36); Arch 0.3.0-1 was about 4.4 MiB.
 
-- **Previous artifacts:** 0.2.0 AppImage/checksum/manifest preserved and checksum-verified
-  under `artifacts/releases/0.2.0/appimage/`.
-- **Log retention:** generic test logs are overwritten by later runs; they are not
-  immutable per-release evidence.
+Coverage included indexing, dummy playback/PTY/settings, and Discord setup/fake IPC.
+Arch used the private SDK / `--nodeps`; installation/dependency resolution and
+AppImage FUSE mounting were untested.
+
+The 0.2.0 AppImage/checksum/manifest were preserved and checksum-verified under
+`artifacts/releases/0.2.0/appimage/`. Generic test logs are overwritten by later runs;
+they are not immutable per-release evidence.
 
 ## Historical performance evidence
 
@@ -81,6 +82,6 @@ Isolated two-second Discord worker probe around idle-wakeup changes:
 | Voluntary context switches | 79 | 1 |
 | CPU time | 4.193 ms | 0.025 ms |
 
-- **Logs:** `artifacts/discord-idle-before.log`, `artifacts/discord-idle-after.log`.
-- **Scope:** worker-harness measurements, not whole-player CPU/memory guarantees.
-  Whole-player profiling remains deferred.
+Logs: `artifacts/discord-idle-before.log` and `artifacts/discord-idle-after.log`.
+These are worker-harness measurements, not whole-player CPU/memory guarantees;
+whole-player profiling remains deferred.

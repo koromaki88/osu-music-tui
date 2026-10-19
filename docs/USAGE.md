@@ -20,21 +20,20 @@ osu-player tui --no-cache
 osu-player tui artifacts/library.ndjson              # existing export
 ```
 
-- **Source builds:** run `make indexer` first; packages include the adapter.
-- **Custom adapter:** pass `--indexer /absolute/path/to/executable`. It must accept
-  `--osu-dir DIRECTORY`, not be a DLL or shell command string.
-- **Builds:** no build/restore runs inside the UI.
-- **Timeout:** accepts 1–86400 seconds.
+Source builds need `make indexer` first; packages include the adapter. No build/restore
+runs inside the UI. For a custom adapter, pass `--indexer /absolute/path/to/executable`;
+it must accept `--osu-dir DIRECTORY`, not be a DLL or shell command string. Indexing
+timeout accepts 1–86400 seconds.
 
 ## Terminal controls
 
-- **Startup:** no autoplay.
-- **Terminal:** interactive, with a valid `TERM` entry; UTF-8 such as `LANG=C.UTF-8`
-  is recommended. Monochrome terminals work.
-- **Size:** at least 50 columns × 14 rows. Smaller terminals show a resize message
-  without stopping audio.
-- **Limitations:** no mouse input; complex emoji may render imperfectly.
-- **Cleanup:** quit and handled signals restore terminal settings.
+The UI starts without autoplay. Use an interactive terminal with a valid `TERM`
+entry and preferably UTF-8, such as `LANG=C.UTF-8`. Monochrome terminals work.
+The minimum size is 50 columns × 14 rows; smaller terminals show a resize message
+without stopping audio.
+
+Mouse input is unsupported, and complex emoji may render imperfectly. Quit and
+handled signals restore terminal settings.
 
 | Key | Action |
 |---|---|
@@ -58,10 +57,10 @@ osu-player tui artifacts/library.ndjson              # existing export
 
 ### Search
 
-- Filters update as you type; Enter applies the filter, then Enter again plays.
-- Esc cancels the edit; Backspace removes one UTF-8 codepoint; Ctrl-U clears the query.
-- Matching is ASCII-case-insensitive and supports exact Unicode text.
-- Filtering does not change the playback queue or interrupt audio.
+Search filters as you type. Enter applies the filter; press Enter again to play.
+Esc cancels the edit, Backspace removes one UTF-8 codepoint, and Ctrl-U clears the query.
+Matching is ASCII-case-insensitive and supports exact Unicode text. Filtering does
+not change the playback queue or interrupt audio.
 
 ### Queue behavior
 
@@ -80,24 +79,23 @@ watcher. Integration setup does not require reindexing.
 
 ### What refresh preserves
 
-- **Source:** directory mode runs the adapter; export mode reloads the file.
-- **Availability:** one refresh at a time; the stale library stays usable during indexing.
-- **Failure recovery:** failed refreshes retain the last usable library/cache.
-- **Playback:** unchanged current tracks keep playing; removed/replaced tracks pause
-  without autoplay.
-- **UI state:** search, surviving selection/queue entries, and preferences are retained
-  where possible.
+Directory mode runs the adapter; export mode reloads the file. Only one refresh runs
+at a time, and the stale library stays usable during indexing. A failed refresh
+retains the last usable library/cache.
+
+Unchanged current tracks keep playing; removed/replaced tracks pause without autoplay.
+Search, surviving selection/queue entries, and preferences are retained where possible.
 
 ### Cache rules
 
-- **Location:** `$XDG_CACHE_HOME/osu-music-player/`, defaulting to
-  `~/.cache/osu-music-player/` for unset/relative XDG paths. Each canonical source
-  directory gets a private cache.
-- **Reuse:** unchanged Realm metadata can reuse the cache; corrupt caches trigger
-  reindexing. `r` forces refresh even if Realm is unchanged.
-- **Failures:** reported without preventing use of a successfully indexed library.
-- **Safety:** cache/temp locations inside the source library are rejected.
-- **Cleanup:** quit/timeouts clean up adapter processes and temporary copies.
+Caches live in `$XDG_CACHE_HOME/osu-music-player/`, defaulting to
+`~/.cache/osu-music-player/` for unset/relative XDG paths. Each canonical source
+directory gets a private cache. Unchanged Realm metadata can reuse it; corrupt caches
+trigger reindexing. Pressing `r` forces refresh even if Realm is unchanged.
+
+Cache failures are reported without preventing use of a successfully indexed library.
+Cache/temp locations inside the source library are rejected. Quit/timeouts clean up
+adapter processes and temporary copies.
 
 ## Preferences and private data
 
@@ -133,12 +131,12 @@ credentials or listening-history files.
 ./squashfs-root/AppRun tui
 ```
 
-- **Relocation:** keep the extracted directory together. The AppImage itself can
-  otherwise be moved/renamed without its source tree.
-- **Host requirements:** glibc and the dynamic loader are host-provided. Alpine/musl,
-  Windows, and macOS are unsupported.
-- **Verification:** use `sha256sum -c` on adjacent checksum files. Checksums detect
-  corruption but are not publisher signatures.
+Keep the extracted directory together. The AppImage itself can otherwise be
+moved/renamed without its source tree. glibc and the dynamic loader are host-provided;
+Alpine/musl, Windows, and macOS are unsupported.
+
+Use `sha256sum -c` on adjacent checksum files. Checksums detect corruption but are
+not publisher signatures.
 
 ## CLI commands
 
@@ -149,12 +147,9 @@ osu-player library artifacts/library.ndjson [SEARCH]
 osu-player queue artifacts/library.ndjson
 ```
 
-- **Hash:** `HASH` is a content-store audio SHA-256.
-- **Audio device:** not needed for `probe`/`library`.
-- **Input:** `library -` accepts NDJSON on stdin; `queue` needs a file because stdin
-  is reserved for controls.
-- **Integrations/settings:** CLI playback does not publish Discord/Last.fm updates
-  or save preferences.
+`HASH` is a content-store audio SHA-256. `probe`/`library` need no audio device.
+`library -` accepts NDJSON on stdin; `queue` needs a file because stdin is reserved
+for controls. CLI playback does not publish Discord/Last.fm updates or save preferences.
 
 Type commands followed by Enter:
 

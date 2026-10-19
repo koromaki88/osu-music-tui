@@ -16,9 +16,9 @@ chmod +x osu-player-x86_64.AppImage
 ./osu-player-x86_64.AppImage tui
 ```
 
-- **Requires:** Linux x86-64, glibc 2.36+, a UTF-8 locale, and working host audio.
-- **Self-contained:** no separate .NET installation needed.
-- **Without FUSE:** use `--appimage-extract-and-run tui`.
+Requires Linux x86-64, glibc 2.36+, a UTF-8 locale, and working host audio. The
+AppImage is self-contained; no separate .NET installation is needed. Without FUSE,
+use `--appimage-extract-and-run tui`.
 
 ### Arch Linux
 
@@ -27,9 +27,9 @@ sudo pacman -U artifacts/arch/osu-music-player-0.4.0-1-x86_64.pkg.tar.zst
 osu-player tui
 ```
 
-- **Requires:** an up-to-date Arch system, system libraries, and the .NET 10 runtime.
-- **Release status:** local, unsigned builds—not published downloads. Public
-  distribution is pending licensing review.
+Use an up-to-date Arch system. The native package uses system libraries and the
+.NET 10 runtime. Current packages are local, unsigned builds—not published downloads.
+Public distribution is pending licensing review.
 
 ### Library location
 

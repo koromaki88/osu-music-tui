@@ -33,11 +33,10 @@
 | `make test-arch-package` | Build and validate extracted Arch package | `test-arch-package.log` |
 | `make test-integration` | Explicitly authorized real-library verification only | `test-integration.log` |
 
-- **Output:** targets display stdout/stderr and save logs; `pipefail` and `tee`
-  preserve failures.
-- **Retention:** each run replaces its log. Preserve important earlier logs before rerunning.
-- **Location:** override with `TEST_LOG_DIR=/path/to/logs`. Logs/artifacts are gitignored.
-- **Scope:** `make test` checks packaging helpers but does **not** build packages.
+Targets display stdout/stderr and save logs, preserving failures with `pipefail` and
+`tee`. Each run replaces its log; preserve important earlier logs before rerunning.
+Override the directory with `TEST_LOG_DIR=/path/to/logs`. Logs/artifacts are gitignored.
+`make test` checks packaging helpers but does **not** build packages.
 
 Coverage and test-file locations are described in [Architecture](docs/ARCHITECTURE.md).
 
@@ -72,11 +71,10 @@ make test-integration OSU_DIR=/path/to/osu-data
 make test-integration OSU_DIR=/path/to/osu-data INTEGRATION_VERIFY=full INTEGRATION_TIMEOUT=900
 ```
 
-- **Quick mode:** checks Realm/config control files, root entries, and exported
-  audio-path existence—not proof that every audio file stayed unchanged.
-- **Full mode:** reads the library twice.
-- **Timeout:** 300 seconds by default, per subprocess—not hashing or the entire test.
-- **Output:** progress and at most five song titles.
+Quick mode checks Realm/config control files, root entries, and exported audio-path
+existence—not proof that every audio file stayed unchanged. Full mode reads the
+library twice. The default 300-second timeout applies per subprocess, not to hashing
+or the entire test. Output shows progress and at most five song titles.
 
 ## Packaging policy
 
