@@ -14,6 +14,7 @@ struct Settings {
     std::string search;
     bool discord_enabled{};
     std::string discord_application_id;
+    bool lastfm_enabled{};
     bool operator==(const Settings&) const = default;
 };
 

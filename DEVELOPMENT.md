@@ -75,6 +75,106 @@ use isolated fake sockets only. Last.fm is not included. These are local unsigne
 packages, not public-distribution approval. This validation record was added after
 packaging and is not embedded in the already-built packages.
 
+## Last.fm development implementation
+
+The native source build now includes optional personal API credentials, browser
+authorization, private atomic credential persistence, Now Playing, and scrobbling. `l` opens
+setup, `d` in that panel disables, and `x` removes local session authorization.
+No project credentials are bundled. The credential file is separate from preferences;
+it is plaintext with owner-only permissions, not encrypted or keyring-backed.
+
+An owned sleeping worker handles disk and HTTPS work without holding the UI mailbox
+mutex during I/O. Requests use a fixed HTTPS endpoint, certificate/hostname verification,
+no redirects, bounded response size, connect/total deadlines, and cancellation on
+disable, replacement, playback changes, and shutdown. Generic status messages omit
+server diagnostics and secrets. Last.fm and Discord receive the same drained event
+batch. Now Playing uses its latest-state snapshot; scrobbling consumes explicit
+`listening_eligible` events and never reconstructs omitted sessions from snapshots.
+
+Local/transport failures use typed, fixed diagnostic categories and numeric errno,
+curl, or HTTP codes. Arbitrary exception text remains redacted. Regression tests
+cover credential modes, malformed responses, HTTP 503, and simulated curl DNS,
+timeout, and certificate failures separately from Last.fm API errors.
+The endpoint now explicitly includes `?format=json`; credentials/signatures remain
+in the POST body. Server-issued tokens/session keys use a separate bounded
+URL-safe validator rather than API-key validation. Synthetic tests cover XML,
+non-object JSON, missing/wrong-type/unsafe tokens, and nonhex opaque tokens/session
+storage. Response diagnostics identify the failing stage without showing values.
+After those changes the user confirmed live authorization and Now Playing work.
+
+`make test` passes, including deterministic signature/form/metadata tests, private
+file safety tests, fake authorization/session restoration/revocation, ignored/failed
+Now Playing, cancellation, and TUI masking/cancel/resize/disable/restart tests. Tests
+do not contact Last.fm, launch osu!, or scan a real library. Live scrobble acceptance
+remains unverified; authorization/Now Playing were reported working by the user.
+The focused Last.fm ASan/UBSan suite also passes; its log is
+`artifacts/lastfm-sanitizer.log`. The complete native-suite log is `artifacts/tests.log`.
+
+### Durable scrobbling
+
+`LastfmQueue` owns an exclusive nonblocking `flock`, a bounded private JSON outbox,
+and recent completed-session receipts. Each valid event is bound to the authorized
+account at ingestion. The worker persists it atomically with file/directory fsync
+**before** submitting; no disk or HTTPS work runs under the UI mailbox mutex.
+Only explicit timing-eligible events with valid structured metadata, known duration
+over 30 seconds, sufficient credited listening, and a valid original start timestamp
+are admitted. Events received while disabled/unauthorized are not cached for later.
+
+`scrobbles.json` lives beside credentials in the private Last.fm config directory.
+It stores at most 1,024 pending plays, 4,096 bounded account/session receipts, and
+persisted retry deadlines/failure counts, capped at 8 MiB. It excludes credentials,
+paths, audio hashes, library IDs, and invented album/chosen-by-user metadata. It does
+contain plaintext listening history and local playback-session identifiers.
+Unsafe, unsupported, or malformed files block delivery without being overwritten;
+full queues retain existing entries and count unsaved new plays. A second player
+may use Now Playing but cannot capture/drain scrobbles while the outbox is locked.
+
+Pending plays drain FIFO per normalized account, one at a time, even after playback
+stops. Switching accounts never reassigns old plays. Disabling/disconnecting cancels
+network work but retains the outbox; normal shutdown flushes accepted mailbox
+events before joining. HTTP requests are spaced by at least 200 ms. Transient API
+11/16/29, transport failures, and uncertain/malformed responses retain the entry,
+with exponential retry delay from 30 seconds to 30 minutes. Other permanent API
+rejections and valid ignored responses become terminal receipts, not retries.
+API 9 preserves the entry and requires reauthorization; credential/permission errors
+pause delivery pending repair. JSON acknowledgements must have consistent accepted/
+ignored counts, ignored code, and the original timestamp; string/numeric attributes
+and a single object or one-item array are supported. Returned metadata corrections
+are never reused.
+
+Receipts suppress normal duplicate events/restarts but cannot guarantee exactly-once
+delivery after a lost server reply or a crash between acceptance and receipt fsync.
+Retries preserve the original timestamp/metadata. A crash before mailbox persistence
+can lose recent eligibility events; no lost journal history is invented to compensate.
+No automatic expiry silently deletes queued plays; server filtering is reported.
+
+`tests/lastfm_scrobble_test.cpp` covers timing/metadata gating, timestamp preservation,
+queue restart/FIFO/account isolation, exclusive locks, limits, malformed/newer files,
+symlinks/FIFOs/modes, private content, disk-write failure, accepted/ignored/rejected
+responses, transient and rate-limit retries, malformed ACKs/timeouts, revocation,
+duplicate receipts, disable cancellation, and final-event persistence at shutdown.
+Controller-to-fake-service coverage now drives `PlayerController` with an owned
+fake audio backend and fake playback clock through pause, seeks, resume, threshold,
+stop/replay, and shutdown-settled eligibility. No eligibility flag is fabricated in
+that path. Concurrency regressions verify that unrelated playback revisions cannot
+discard scrobble errors (especially revoked sessions), and that disconnect is an
+ordered local action that survives immediate quit or re-enable. Disconnect requests
+are processed before a later load and are flushed at normal worker shutdown.
+It runs in `make test` and is registered in CMake. The native suite and focused
+scrobble ASan/UBSan suite pass; logs are `artifacts/tests.log` and
+`artifacts/lastfm-scrobble-sanitizer.log`. CMake/Ninja remain unavailable here, so
+the updated CMake registration is unverified. No package builds were run.
+
+New native dependencies are libcurl >=7.85, OpenSSL libcrypto, and CA certificates.
+Build declarations were updated, but AppImage/Arch packages were **not rebuilt**;
+their existing 0.3.0 artifacts do not contain Last.fm. Targeted validation of both
+formats is recommended before release, especially TLS CA discovery in the AppImage.
+Obtain packaging approval first. CMake validation remains pending if tools are absent.
+
+Protocol references: <https://www.last.fm/api/desktopauth>,
+<https://www.last.fm/api/scrobbling>, and
+<https://www.last.fm/api/show/track.updateNowPlaying>.
+
 ## Test commands and logs
 
 | Target | Scope | Saved log |

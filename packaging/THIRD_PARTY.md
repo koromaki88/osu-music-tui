@@ -21,5 +21,7 @@ obligation. No application license is selected automatically by this builder.
 Realm .NET: https://github.com/realm/realm-dotnet
 Realm Core: https://github.com/realm/realm-core
 FFmpeg: https://ffmpeg.org/legal.html
+libcurl: https://curl.se/docs/copyright.html
+OpenSSL: https://www.openssl.org/source/license.html
 AppImage tooling: https://github.com/AppImage/appimagetool
 AppImage runtime: https://github.com/AppImage/type2-runtime

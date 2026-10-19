@@ -33,6 +33,8 @@ pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavut
 pkg_check_modules(JSON_C REQUIRED IMPORTED_TARGET json-c)
 pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
 pkg_check_modules(NCURSESW REQUIRED IMPORTED_TARGET ncursesw)
+pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl>=7.85)
+pkg_check_modules(CRYPTO REQUIRED IMPORTED_TARGET libcrypto)
 find_package(Threads REQUIRED)
 
 add_library(osu_player_core
@@ -43,6 +45,9 @@ add_library(osu_player_core
     src/player_controller.cpp
     src/playback_events.cpp
     src/discord_presence.cpp
+    src/lastfm_client.cpp
+    src/lastfm_queue.cpp
+    src/lastfm_presence.cpp
     src/library_view.cpp
     src/terminal_text.cpp
     src/library_refresh.cpp
@@ -50,7 +55,7 @@ add_library(osu_player_core
 )
 
 target_include_directories(osu_player_core PUBLIC include)
-target_link_libraries(osu_player_core PRIVATE PkgConfig::JSON_C Threads::Threads)
+target_link_libraries(osu_player_core PRIVATE PkgConfig::JSON_C PkgConfig::CURL PkgConfig::CRYPTO Threads::Threads)
 osu_player_set_warnings(osu_player_core)
 osu_player_enable_sanitizers(osu_player_core)
 
@@ -101,6 +106,18 @@ if(BUILD_TESTING)
     osu_player_set_warnings(discord-presence-tests)
     osu_player_enable_sanitizers(discord-presence-tests)
     add_test(NAME discord-presence COMMAND discord-presence-tests)
+
+    add_executable(lastfm-tests tests/lastfm_test.cpp)
+    target_link_libraries(lastfm-tests PRIVATE osu_player_core)
+    osu_player_set_warnings(lastfm-tests)
+    osu_player_enable_sanitizers(lastfm-tests)
+    add_test(NAME lastfm COMMAND lastfm-tests)
+
+    add_executable(lastfm-scrobble-tests tests/lastfm_scrobble_test.cpp)
+    target_link_libraries(lastfm-scrobble-tests PRIVATE osu_player_core)
+    osu_player_set_warnings(lastfm-scrobble-tests)
+    osu_player_enable_sanitizers(lastfm-scrobble-tests)
+    add_test(NAME lastfm-scrobble COMMAND lastfm-scrobble-tests)
     add_test(NAME discord-ipc COMMAND Python3::Interpreter
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/discord_integration.py
         --test-binary $<TARGET_FILE:discord-presence-tests> --player-binary $<TARGET_FILE:osu-player>)

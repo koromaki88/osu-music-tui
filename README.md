@@ -87,6 +87,7 @@ public distribution. To uninstall: `sudo pacman -R osu-music-player`.
 ## Build from source
 
 C++ dependencies: GCC/Clang with C++20, Make (or CMake), `pkg-config`, `json-c`, SDL2, `ncursesw`,
+libcurl 7.85+ and OpenSSL libcrypto development libraries, a system CA certificate store,
 and FFmpeg development libraries (`libavformat`, `libavcodec`, `libavutil`,
 `libswresample`; FFmpeg 5+). Tests also require Python 3.11+ and the `ffmpeg` executable
 with MP3 (`libmp3lame`) and Ogg Vorbis (`libvorbis`) encoders.
@@ -299,8 +300,70 @@ The title bar reports connection status. Enable activity sharing in Discord if n
 Sandboxed Discord installations may need an accessible IPC socket; an absolute
 `OSU_PLAYER_DISCORD_SOCKET` path overrides normal discovery. Fake-socket tests pass,
 and live Discord rendering has been reported working by the user. Version 0.3.0
-includes this feature; older 0.2.0 packages do not. Last.fm authorization and scrobbling
-are not implemented yet.
+includes this feature; older 0.2.0 packages do not.
+
+### Last.fm setup (development build)
+
+Browser authorization, Now Playing, and scrobbling are available in the source-build
+TUI, **not in the existing 0.3.0 packages**. Last.fm defaults off and is independent
+of Discord. Existing authorization still works; no new API credentials are needed.
+
+1. Obtain your own application API key and shared secret at
+   <https://www.last.fm/api/account/create>. Do not share the secret in chat or logs.
+2. Press `l` in the TUI, then Enter to enter your API key and masked shared secret.
+3. Open the displayed Last.fm authorization URL in your browser and approve access.
+   Return to the player and press Enter to finish. Never enter your Last.fm password
+   in the player. Esc closes/cancels the panel; playback continues.
+
+In the `l` panel, `c` replaces application credentials, `d` disables the integration
+while retaining authorization, and `x` disconnects locally by removing the saved
+session. Both stop submissions and retain queued plays; queued plays can resume only
+when the same account is authorized and enabled again. Revoke server-side access in
+your Last.fm account settings if needed.
+Enablement persists, but playback never resumes automatically on restart.
+
+Credentials are stored separately in
+`$XDG_CONFIG_HOME/osu-player/lastfm/credentials.json` (default
+`~/.config/osu-player/lastfm/credentials.json`), with a private 0700 directory and
+0600 file. **They are not encrypted**; protect your account, backups, and terminal
+recordings. Unsafe, malformed, or newer credential files are preserved rather than
+overwritten. Only enablement is stored in ordinary preferences.
+
+Requests use verified HTTPS on a background worker. Now Playing sends structured
+artist/title and audio duration when known, once per playback session; failed or
+ignored updates are not retried. Local paths, hashes, library IDs, beatmap IDs, and
+invented album metadata are not sent. Pause/stop prevents new Now Playing updates but cannot
+clear an update already accepted by Last.fm; it expires on the service.
+
+Scrobbles are queued when audio is **longer than 30 seconds** and actual credited
+listening reaches half its duration or four minutes, whichever is sooner. Pauses and
+seeked-over audio do not count. Each play/repeat is a separate session; previously
+eligible snapshots and missing playback events are not retrospectively submitted.
+
+The private `scrobbles.json` file beside credentials holds up to 1,024 pending plays,
+associated with the authorized account and original playback-start timestamp. Old
+pending plays are sent before newer ones for that account, one request at a time.
+Temporary API/network failures back off from 30 seconds up to 30 minutes between
+retries, including across restarts. Permanent API rejections and filtered/ignored
+plays are not retried. Revoked sessions pause delivery until reauthorization.
+
+The `l` panel shows pending plays, unsaved-play warnings, and the latest scrobble
+result. A full or unsafe queue never silently discards old pending plays; new plays
+that cannot be saved are counted as unsaved. Only one player can own the outbox at
+a time. Queue problems can be retried by disabling and enabling after correcting
+the cause; malformed/newer files are preserved, not automatically repaired/deleted.
+
+Recent completed-session receipts prevent ordinary duplicates and survive restarts
+(bounded to 4,096 receipts). However, a server acceptance followed by a lost reply
+or a crash before receipt persistence can cause a duplicate on retry: delivery is
+not exactly-once. Abrupt termination can also lose eligibility events not yet saved
+by the worker; normal shutdown flushes its bounded event mailbox. The queue and
+receipts contain private listening history in plaintext; protect backups too.
+
+If setup fails, the panel distinguishes `Credentials:`, `Signing:`, `HTTPS:`,
+`Response:`, and numeric Last.fm API errors. Curl codes identify transport failures
+(for example, 6 is DNS, 28 is timeout, and 60 is certificate verification). Report
+only this status text, never the credentials or authorization URL.
 
 ### Background indexing and cache
 

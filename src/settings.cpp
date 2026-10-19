@@ -96,6 +96,15 @@ Settings load_settings(const std::filesystem::path& path)
             if (settings.discord_application_id.size() > 32 || settings.discord_application_id.find('\0') != std::string::npos) { invalid(); }
         }
     }
+    json_object* lastfm{};
+    if (json_object_object_get_ex(root.get(), "lastfm", &lastfm)) {
+        if (!json_object_is_type(lastfm, json_type_object)) { invalid(); }
+        json_object* enabled{};
+        if (json_object_object_get_ex(lastfm, "enabled", &enabled)) {
+            if (!json_object_is_type(enabled, json_type_boolean)) { invalid(); }
+            settings.lastfm_enabled = json_object_get_boolean(enabled) != 0;
+        }
+    }
     return settings;
 }
 
@@ -112,6 +121,9 @@ void save_settings(const std::filesystem::path& path, const Settings& settings)
     json_object_object_add(root.get(), "discord", discord);
     json_object_object_add(discord, "enabled", json_object_new_boolean(settings.discord_enabled));
     json_object_object_add(discord, "application_id", json_object_new_string(settings.discord_application_id.c_str()));
+    auto* lastfm = json_object_new_object();
+    json_object_object_add(root.get(), "lastfm", lastfm);
+    json_object_object_add(lastfm, "enabled", json_object_new_boolean(settings.lastfm_enabled));
     const std::string data = std::string{json_object_to_json_string_ext(root.get(), JSON_C_TO_STRING_PRETTY)} + '\n';
     std::filesystem::create_directories(path.parent_path());
     std::string pattern = (path.parent_path() / ".settings-XXXXXX").string();

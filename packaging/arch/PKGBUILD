@@ -6,7 +6,7 @@ pkgdesc='Unofficial terminal music player for an existing osu!(lazer) library'
 arch=('x86_64')
 # No application license has been chosen; do not imply redistribution permission.
 license=('custom:unlicensed')
-depends=('glibc' 'gcc-libs' 'ffmpeg' 'json-c' 'sdl2' 'ncurses' 'dotnet-runtime-10.0'
+depends=('glibc' 'gcc-libs' 'ffmpeg' 'json-c' 'sdl2' 'ncurses' 'dotnet-runtime-10.0' 'curl' 'openssl' 'ca-certificates'
          'libavformat.so' 'libavcodec.so' 'libavutil.so' 'libswresample.so')
 makedepends=('gcc' 'make' 'pkgconf' 'dotnet-sdk-10.0')
 checkdepends=('python' 'ffmpeg')

@@ -270,6 +270,42 @@ def exercise_ui(executable, library):
         session.finish()
 
 
+def exercise_lastfm_setup(executable, library, root):
+    config = root / "lastfm-config"
+    environment = {"XDG_CONFIG_HOME": str(config)}
+    with Session(executable, library, **environment) as session:
+        session.expect("Last.fm: off", "Matches: 3")
+        session.send("\nl")
+        session.expect("Last.fm setup", "needs API credentials", "State: playing")
+        session.send("\nxyz\n")
+        session.expect("Enter exactly 32 hexadecimal characters.")
+        session.send("\x15" + "a" * 32 + "\n")
+        session.expect("API secret: _", "State: playing")
+        # Cancel before submitting credentials: this PTY test never contacts Last.fm.
+        secret = "b123456789abcdef"
+        session.send(secret)
+        session.expect("API secret: " + "*" * len(secret) + "_")
+        assert secret not in session.screen.text(), "API secret leaked on screen"
+        session.resize(8, 30)
+        session.expect("Terminal too small")
+        session.send("\x1b")
+        session.resize(24, 100)
+        session.expect("Matches: 3", "State: playing")
+        session.send("l")
+        session.expect("Last.fm setup", "needs API credentials")
+        session.send("d")
+        session.expect("Last.fm: off", "Matches: 3")
+        session.send("q")
+        session.finish()
+    settings = json.loads((config / "osu-player/settings.json").read_text())
+    assert settings["lastfm"] == {"enabled": False}
+    assert not (config / "osu-player/lastfm/credentials.json").exists()
+    with Session(executable, library, **environment) as session:
+        session.expect("Last.fm: off", "State: stopped")
+        session.send("q")
+        session.finish()
+
+
 def exercise_settings(executable, library, root):
     root = root / "settings-tests"
     root.mkdir()
@@ -378,6 +414,7 @@ def main():
         write_library(library, records)
         exercise_ui(options.player_binary, library)
         exercise_settings(options.player_binary, library, root)
+        exercise_lastfm_setup(options.player_binary, library, root)
 
         empty = root / "empty.ndjson"
         write_library(empty, [])
@@ -411,7 +448,7 @@ def main():
                                text=True, capture_output=True, timeout=10)
         if piped.returncode != 1 or "interactive terminal" not in piped.stderr:
             raise RuntimeError("non-TTY input/output must be rejected cleanly")
-    print("TUI PTY tests passed: keys, UTF-8 search, resize, empty library, device error, terminal cleanup, settings persistence")
+    print("TUI PTY tests passed: keys, UTF-8 search, resize, empty library, device error, terminal cleanup, settings persistence, Last.fm setup/masking/cancel (no network)")
 
 
 if __name__ == "__main__":

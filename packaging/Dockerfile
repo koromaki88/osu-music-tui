@@ -6,7 +6,7 @@ ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 LANG=C.UTF-8 DOTNET_ROOT=/opt/
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libicu72 libssl3 libgssapi-krb5-2 \
     g++ make pkg-config python3 ffmpeg libavformat-dev libavcodec-dev libavutil-dev \
-    libswresample-dev libsdl2-dev libncurses-dev libjson-c-dev ncurses-term \
+    libswresample-dev libsdl2-dev libncurses-dev libjson-c-dev ncurses-term libcurl4-openssl-dev libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 # Keep packaging-only utilities in a separate cached layer.
 RUN apt-get update && apt-get install -y --no-install-recommends file desktop-file-utils \

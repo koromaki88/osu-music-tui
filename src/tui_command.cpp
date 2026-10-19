@@ -5,6 +5,7 @@
 #include "osu_player/player_controller.hpp"
 #include "osu_player/settings.hpp"
 #include "osu_player/discord_presence.hpp"
+#include "osu_player/lastfm_presence.hpp"
 #include "osu_player/terminal_text.hpp"
 
 #include <curses.h>
@@ -162,6 +163,66 @@ struct DiscordSetup {
 
 enum class SetupResult { editing, cancelled, accepted };
 
+struct LastfmSetup {
+    enum class Field { menu, api_key, secret };
+    bool active{};
+    Field field{Field::menu};
+    std::string input;
+    std::string api_key;
+    std::string error;
+};
+
+std::string_view lastfm_phase_name(const LastfmPhase phase)
+{
+    switch (phase) {
+        case LastfmPhase::off: return "off";
+        case LastfmPhase::loading: return "working";
+        case LastfmPhase::needs_credentials: return "needs credentials";
+        case LastfmPhase::needs_authorization: return "needs authorization";
+        case LastfmPhase::awaiting_authorization: return "authorize in browser";
+        case LastfmPhase::connected: return "connected";
+        case LastfmPhase::error: return "error (l for details)";
+    }
+    return "unavailable";
+}
+
+void lastfm_setup_key(const wint_t key, const bool special, LastfmSetup& setup,
+                      LastfmPresence& lastfm, bool& enabled)
+{
+    if (!special && key == 27) { setup = {}; return; }
+    const bool enter = (!special && (key == '\n' || key == '\r')) || (special && key == KEY_ENTER);
+    if (setup.field != LastfmSetup::Field::menu) {
+        if (enter) {
+            if (!valid_lastfm_key(setup.input)) { setup.error = "Enter exactly 32 hexadecimal characters."; return; }
+            if (setup.field == LastfmSetup::Field::api_key) {
+                setup.api_key = std::move(setup.input); setup.input.clear();
+                setup.field = LastfmSetup::Field::secret; setup.error.clear();
+            } else {
+                lastfm.set_credentials(std::move(setup.api_key), std::move(setup.input));
+                setup = {true, LastfmSetup::Field::menu, {}, {}, {}};
+            }
+        } else if ((special && key == KEY_BACKSPACE) || (!special && (key == 127 || key == 8))) {
+            erase_last_utf8(setup.input); setup.error.clear();
+        } else if (!special && key == 21) { setup.input.clear(); setup.error.clear(); }
+        else if (!special && key >= 32 && key <= 126 && setup.input.size() < 32) {
+            setup.input += static_cast<char>(key); setup.error.clear();
+        }
+        return;
+    }
+    if (!special && key == 'c') { setup.field = LastfmSetup::Field::api_key; setup.input.clear(); }
+    else if (!special && (key == 'd' || key == 'x')) {
+        enabled = false;
+        if (key == 'x') { lastfm.disconnect(); } else { lastfm.configure(false); }
+        setup = {};
+    } else if (enter) {
+        const auto status = lastfm.status();
+        if (status.phase == LastfmPhase::needs_credentials) { setup.field = LastfmSetup::Field::api_key; }
+        else if (status.phase == LastfmPhase::awaiting_authorization) { lastfm.complete_authorization(); }
+        else if (status.phase == LastfmPhase::needs_authorization || status.phase == LastfmPhase::error) { lastfm.authorize(); }
+        else if (status.phase == LastfmPhase::connected) { setup = {}; }
+    }
+}
+
 SetupResult discord_setup_key(const wint_t key, const bool special, DiscordSetup& setup)
 {
     if (!special && key == 27) { return SetupResult::cancelled; }
@@ -186,7 +247,7 @@ SetupResult discord_setup_key(const wint_t key, const bool special, DiscordSetup
 
 void render(const PlayerController& player, const LibraryView& view, const bool searching,
             const std::string& notice, const bool colors, const bool refreshing, const std::string& discord_status,
-            const DiscordSetup& discord_setup)
+            const DiscordSetup& discord_setup, const LastfmStatus& lastfm_status, const LastfmSetup& lastfm_setup)
 {
     int rows{};
     int columns{};
@@ -194,14 +255,15 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
     erase();
     if (rows < 14 || columns < 50) {
         draw(0, 0, "Terminal too small", columns, A_BOLD);
-        draw(1, 0, discord_setup.active ? "Resize to at least 50x14; Esc cancels setup" :
+        draw(1, 0, discord_setup.active || lastfm_setup.active ? "Resize to at least 50x14; Esc cancels setup" :
              "Resize to at least 50x14; q quits", columns);
         wnoutrefresh(stdscr);
         doupdate();
         return;
     }
 
-    draw(0, 0, "osu! music player | Discord: " + discord_status, columns, A_BOLD, colors ? 1 : 0);
+    draw(0, 0, "osu! music player | Discord: " + discord_status + " | Last.fm: " +
+         std::string{lastfm_phase_name(lastfm_status.phase)}, columns, A_BOLD, colors ? 1 : 0);
     const std::string summary = "Library: " + std::to_string(player.library().tracks().size()) +
         " | Matches: " + std::to_string(view.matches().size()) +
         " | Shuffle: " + (player.shuffle() ? "on" : "off") +
@@ -214,10 +276,10 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
          "Library (Enter plays selection; * marks current track)", columns);
 
     const auto visible_rows = static_cast<std::size_t>(rows - 10);
-    if (view.matches().empty()) {
+    if (!lastfm_setup.active && view.matches().empty()) {
         draw(4, 1, player.library().tracks().empty() ? "Library is empty" : "No matching tracks", columns - 2);
     }
-    for (std::size_t offset = 0; offset < visible_rows && view.top() + offset < view.matches().size(); ++offset) {
+    for (std::size_t offset = 0; !lastfm_setup.active && offset < visible_rows && view.top() + offset < view.matches().size(); ++offset) {
         const std::size_t match_row = view.top() + offset;
         const std::size_t index = view.matches()[match_row];
         const Track& track = player.library().tracks()[index];
@@ -232,6 +294,24 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
         draw(4 + static_cast<int>(offset), 0, line, columns, attributes, colors && current ? 2 : 0);
     }
 
+    if (lastfm_setup.active) {
+        draw(2, 0, std::string(static_cast<std::size_t>(columns - 1), ' '), columns);
+        draw(3, 0, std::string(static_cast<std::size_t>(columns - 1), ' '), columns);
+        draw(2, 0, "Last.fm setup — Now Playing and scrobbling | pending: " + std::to_string(lastfm_status.pending) +
+             " | unsaved: " + std::to_string(lastfm_status.dropped), columns, A_BOLD);
+        const bool editing = lastfm_setup.field != LastfmSetup::Field::menu;
+        const auto entry = lastfm_setup.field == LastfmSetup::Field::secret ?
+            "API secret: " + std::string(lastfm_setup.input.size(), '*') + "_" : "API key: " + lastfm_setup.input + "_";
+        draw(3, 0, editing ? entry : lastfm_status.message, columns);
+        draw(4, 0, editing ? "Enter continue | Esc cancel | Ctrl-U clear (never enter a Last.fm password)" :
+             "Enter authorize/confirm | Esc close | c credentials | d disable | x disconnect", columns);
+        const auto url = editing ? std::string{} : lastfm_status.authorization_url;
+        if (!editing && url.empty()) { draw(5, 0, lastfm_status.scrobble_status, columns); }
+        const auto width = static_cast<std::size_t>(columns - 1);
+        for (std::size_t offset = 0; offset < url.size() && offset / width < static_cast<std::size_t>(rows - 11); offset += width) {
+            draw(5 + static_cast<int>(offset / width), 0, url.substr(offset, width), columns);
+        }
+    }
     const Track* current = player.current_track();
     draw(rows - 6, 0, current ? "Now: " + current->display_artist() + " — " + current->display_title()
                               : "Now: No track selected", columns, A_BOLD);
@@ -246,12 +326,17 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
     const auto filled = static_cast<std::size_t>(static_cast<double>(bar_width) * fraction);
     draw(rows - 4, 0, "[" + std::string(filled, '=') +
          std::string(static_cast<std::size_t>(bar_width) - filled, '-') + "]", columns);
-    draw(rows - 3, 0, discord_setup.active && !discord_setup.error.empty() ? discord_setup.error : notice,
+    draw(rows - 3, 0, lastfm_setup.active && !lastfm_setup.error.empty() ? lastfm_setup.error :
+         discord_setup.active && !discord_setup.error.empty() ? discord_setup.error : notice,
          columns, A_NORMAL, colors ? 3 : 0);
-    draw(rows - 2, 0, discord_setup.active ? "Create an app: https://discord.com/developers/applications" :
+    draw(rows - 2, 0, lastfm_setup.active ? "Get personal API credentials: https://www.last.fm/api/account/create" :
+         discord_setup.active ? "Create an app: https://discord.com/developers/applications" :
          "j/k move  Enter play  Space pause  n/p next/prev  / search  q quit", columns);
-    draw(rows - 1, 0, discord_setup.active ? "Copy its Application ID. Playback continues while you edit." :
-         "Left/Right seek  +/- volume  s shuffle  R repeat  x stop  r refresh  d Discord", columns);
+    draw(rows - 1, 0, lastfm_setup.active ? (!lastfm_status.authorization_url.empty() ?
+         "Open the link in your browser, approve access, then press Enter." :
+         "Credentials are private files, not encrypted. Playback continues while editing.") :
+         discord_setup.active ? "Copy its Application ID. Playback continues while you edit." :
+         "Left/Right seek  +/- volume  s shuffle  R repeat  x stop  r refresh  d Discord  l Last.fm", columns);
     wnoutrefresh(stdscr);
     doupdate();
 }
@@ -368,6 +453,13 @@ int run_tui_command(RefreshOptions options)
     } catch (const std::exception&) {
         // Optional integration resource failures must not prevent audio/UI startup.
     }
+    bool lastfm_enabled = saved_settings.lastfm_enabled;
+    LastfmSetup lastfm_setup{lastfm_enabled, LastfmSetup::Field::menu, {}, {}, {}};
+    std::unique_ptr<LastfmPresence> lastfm;
+    try {
+        lastfm = std::make_unique<LastfmPresence>(lastfm_credentials_path());
+        lastfm->configure(lastfm_enabled);
+    } catch (const std::exception&) { }
     const bool export_mode = options.export_file.has_value();
     LibraryRefresh refresh{std::move(options)};
     refresh.start(true);
@@ -402,7 +494,8 @@ int run_tui_command(RefreshOptions options)
         const auto now = std::chrono::steady_clock::now();
         if (now >= next_frame) {
             render(player, view, searching, settings_warning.empty() ? notice : settings_warning,
-                   terminal.colors, refresh.busy(), discord ? discord->status() : "unavailable", discord_setup);
+                   terminal.colors, refresh.busy(), discord ? discord->status() : "unavailable", discord_setup,
+                   lastfm ? lastfm->status() : LastfmStatus{LastfmPhase::error, "Last.fm unavailable", {}}, lastfm_setup);
             next_frame = now + std::chrono::milliseconds{100};
         }
         wint_t key{};
@@ -411,6 +504,8 @@ int run_tui_command(RefreshOptions options)
             if (result != ERR) {
                 if (result == KEY_CODE_YES && key == KEY_RESIZE) {
                     clearok(stdscr, true);
+                } else if (lastfm_setup.active && lastfm) {
+                    lastfm_setup_key(key, result == KEY_CODE_YES, lastfm_setup, *lastfm, lastfm_enabled);
                 } else if (discord_setup.active) {
                     const auto action = discord_setup_key(key, result == KEY_CODE_YES, discord_setup);
                     if (action != SetupResult::editing) {
@@ -421,6 +516,12 @@ int run_tui_command(RefreshOptions options)
                     }
                 } else if (searching) {
                     search_key(key, result == KEY_CODE_YES, view, searching, saved_query);
+                } else if (result != KEY_CODE_YES && key == 'l') {
+                    if (lastfm) {
+                        lastfm_enabled = true;
+                        lastfm->configure(true);
+                        lastfm_setup = {true, LastfmSetup::Field::menu, {}, {}, {}};
+                    }
                 } else if (result != KEY_CODE_YES && key == 'd') {
                     if (!discord_enabled && !valid_discord_application_id(discord_application_id)) {
                         discord_setup = {true, discord_application_id, {}};
@@ -445,8 +546,9 @@ int run_tui_command(RefreshOptions options)
         const auto errors = player.take_errors();
         const auto playback_events = player.take_playback_events();
         if (discord) { discord->publish(playback_events, player.playback_snapshot()); }
+        if (lastfm) { lastfm->publish(playback_events, player.playback_snapshot()); }
         const Settings current_settings{player.volume(), player.shuffle(), player.repeat(),
-                                        searching ? saved_query : view.query(), discord_enabled, discord_application_id};
+                                         searching ? saved_query : view.query(), discord_enabled, discord_application_id, lastfm_enabled};
         if (settings_writable && current_settings != saved_settings) {
             try {
                 save_settings(*config_path, current_settings);
@@ -468,7 +570,9 @@ int run_tui_command(RefreshOptions options)
         }
     }
     player.shutdown();
-    if (discord) { discord->publish(player.take_playback_events(), player.playback_snapshot()); }
+    const auto final_events = player.take_playback_events();
+    if (discord) { discord->publish(final_events, player.playback_snapshot()); }
+    if (lastfm) { lastfm->publish(final_events, player.playback_snapshot()); }
     return interrupted ? 128 + interrupted : 0;
 }
 

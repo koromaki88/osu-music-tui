@@ -2,7 +2,24 @@
 
 ## Unreleased
 
+- Hardened Last.fm scrobble replies against unrelated playback changes and made
+  local disconnect survive immediate shutdown/re-enable. Added controller-to-fake-
+  service coverage for pause/seek accounting, replay, and shutdown eligibility.
+- Added Last.fm scrobble submission at the listening threshold, a private durable
+  account-associated outbox, FIFO retries/backoff, revoked-session recovery, bounded
+  duplicate receipts, pending/unsaved status, and isolated persistence/delivery tests.
+  Ambiguous replies or crashes can still cause duplicates on retry; not exactly-once.
+- Request Last.fm JSON format explicitly in the endpoint URL, accept bounded opaque
+  server tokens/session keys instead of assuming hexadecimal API-key syntax, and
+  distinguish JSON parsing from missing/invalid authorization response fields.
+- Separate Last.fm credential-file, HTTPS/curl, signing, and response-format failures
+  instead of hiding them behind a combined request/credential error.
+- Distinguish Last.fm invalid-key, signature, permission, and suspended-key errors
+  using safe numeric codes without exposing credentials or server response text.
 - Changed the Discord cover label from `osu! player` to `osu! music player`.
+- Added optional Last.fm personal API credential setup, browser authorization,
+  private session storage, and background HTTPS Now Playing updates with fake-service
+  and TUI regression tests.
 
 ## 0.3.0
 
