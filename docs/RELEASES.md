@@ -10,6 +10,37 @@ All package validation used synthetic libraries/audio and fake services only.
 It did not launch the game, scan a real library, install or publish packages,
 or create commits/tags.
 
+## 0.4.1 — UI, controls, and loading efficiency
+
+Both formats were rebuilt and validated with synthetic fixtures. Native `make test`
+and `make test-indexer` passed before packaging, then passed again in package builds.
+
+| Format | Artifact | Size | Result |
+|---|---|---|---|
+| AppImage | `artifacts/dist/osu-player-x86_64.AppImage` | 101.3 MiB | Passed `make test-appimage` |
+| Arch 0.4.1-1 | `artifacts/arch/osu-music-player-0.4.1-1-x86_64.pkg.tar.zst` | 4.4 MiB | Passed `make test-arch-package` with private SDK / `--nodeps` |
+
+Coverage includes synthetic indexing (optional BPM/import date and older schemas),
+dummy playback, responsive help/details and duration probing, seek controls and
+shuffle-history navigation, settings, Discord fake IPC, and isolated Last.fm HTTPS
+authorization/Now Playing/scrobbling/restart. AppImage additionally passed relocation,
+no installed .NET/tools on PATH, WAV/MP3/Ogg playback, and minimal-container indexing
+and CA fallback selection. Its x86-64/glibc floor remains 2.36.
+
+- **Integrity:** both adjacent SHA-256 files were independently verified; hashes and
+  sizes are recorded in `artifacts/releases/0.4.1/verified-artifacts.json`.
+- **Logs:** `artifacts/releases/0.4.1/logs/` retains native, synthetic indexer,
+  AppImage, Arch build, and extracted-Arch validation output.
+- **Changes:** `artifacts/releases/0.4.1/release-notes.md`; copyable temporary copy at
+  `/tmp/opencode/osu-player-0.4.1-changes.md`.
+- **Previous artifacts:** 0.4.0 AppImage/checksum/manifest and package logs preserved
+  under `artifacts/releases/0.4.0/`; older versioned Arch packages retained.
+
+Arch installation/dependency resolution remains untested (`--nodeps` was used).
+AppImage FUSE mounting and CMake/Ninja remain unverified. No game launch, real-library
+scan, installation, or publication occurred. This record was added after packaging
+and is not embedded in the already-built packages.
+
 ## 0.4.0 — Last.fm
 
 | Format | Artifact | Size | Result |
