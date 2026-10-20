@@ -11,3 +11,4 @@ compile_commands.json
 /tests/**/obj/
 /artifacts/
 __pycache__/
+*.AppImage
