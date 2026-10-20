@@ -24,7 +24,7 @@ def fingerprint(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path,
-                        default=ROOT / "artifacts/arch/osu-music-player-0.4.0-1-x86_64.pkg.tar.zst")
+                        default=ROOT / "artifacts/arch/osu-music-player-0.4.1-1-x86_64.pkg.tar.zst")
     parser.add_argument("--dotnet", default="dotnet")
     options = parser.parse_args()
     package = options.package.resolve()
@@ -37,7 +37,7 @@ def main():
         unpacked.mkdir()
         subprocess.run(["bsdtar", "-xf", str(package), "-C", str(unpacked)], check=True)
         metadata = (unpacked / ".PKGINFO").read_text()
-        assert "pkgver = 0.4.0-1" in metadata
+        assert "pkgver = 0.4.1-1" in metadata
         for dependency in ("curl", "openssl", "ca-certificates"):
             assert f"depend = {dependency}\n" in metadata
         assert "depend = dotnet-runtime-10.0" in metadata

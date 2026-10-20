@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.1
+
 - Moved Last.fm setup to uppercase `L`; added `h`/`l` seek aliases and enabled
   `n`/`p` next/previous controls inside help/details, following shuffled queue history.
 - Reduced library construction allocations with allocation-free case-insensitive

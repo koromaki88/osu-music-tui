@@ -23,7 +23,7 @@ use `--appimage-extract-and-run tui`.
 ### Arch Linux
 
 ```bash
-sudo pacman -U artifacts/arch/osu-music-player-0.4.0-1-x86_64.pkg.tar.zst
+sudo pacman -U artifacts/arch/osu-music-player-0.4.1-1-x86_64.pkg.tar.zst
 osu-player tui
 ```
 

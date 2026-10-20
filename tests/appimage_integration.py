@@ -73,7 +73,7 @@ def main():
             appdir = moved / "squashfs-root"
             launcher = str(appdir / "AppRun")
             manifest = json.loads((appdir / "usr/share/osu-player/build-manifest.json").read_text())
-            assert manifest["version"] == "0.4.0"
+            assert manifest["version"] == "0.4.1"
             certificates = appdir / "usr/share/osu-player/ca-certificates.crt"
             assert hashlib.sha256(certificates.read_bytes()).hexdigest() == manifest["ca_bundle_sha256"]
             runtime = json.loads((appdir / "usr/lib/osu-player/indexer/osu-indexer.runtimeconfig.json").read_text())
