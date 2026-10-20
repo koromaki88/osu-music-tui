@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import pty
+import re
 import select
 import signal
 import struct
@@ -255,7 +256,7 @@ def exercise_ui(executable, library):
         session.send("j\n")  # Panel input cannot select/play a different track.
         session.expect("State: paused", "Now: Artist — Alpha 日本")
         session.send("G")
-        session.expect("Metadata snapshot")
+        session.expect("select the track to retry.")
         session.resize(30, 160)
         session.send("g")
         session.expect("Track details", "Title: Bêta")
@@ -265,6 +266,10 @@ def exercise_ui(executable, library):
         session.send("k")
         session.send("\x1bOC")  # application-cursor Right
         session.expect("00:05")
+        session.send("h")
+        session.expect("00:00", "State: paused")
+        session.send("l")
+        session.expect("00:05", "State: paused")
         session.send("+sR")
         session.expect("Volume: 75%", "Shuffle: on", "Repeat: one")
         session.send("/zz_missing")
@@ -307,6 +312,44 @@ def exercise_ui(executable, library):
         session.finish()
 
 
+def exercise_queue_keys(executable, audio, root):
+    library = root / "queue-controls.ndjson"
+    write_library(library, [{"type": "track", "stable_id": str(index), "beatmap_set_id": str(index),
+        "artist": "Controls", "title": f"Nav {index}", "audio_filename": "audio.wav",
+        "audio_hash": hashlib.sha256(audio.read_bytes()).hexdigest(), "audio_path": str(audio)} for index in range(5)])
+    with Session(executable, library) as session:
+        session.expect("Library: 5", "State: stopped")
+        session.send("\nn")
+        session.expect("Now: Controls — Nav 1", "State: playing")
+        session.send("p")
+        session.expect("Now: Controls — Nav 0")
+        session.send("sn")
+        session.expect("Shuffle: on", "State: playing")
+        def current():
+            return re.search(r"Now: Controls — Nav ([0-4])", session.screen.text()).group(1)
+        second = current()
+        assert second != "0", "shuffle-next cannot repeat the current entry within a cycle"
+        session.send("n")
+        third = current()
+        assert third not in ("0", second)
+        session.send("p")
+        session.expect(f"Now: Controls — Nav {second}")
+        session.send("n")
+        session.expect(f"Now: Controls — Nav {third}")
+        session.send("?p")
+        session.expect("Help", f"Now: Controls — Nav {second}")
+        session.send(" h")
+        session.expect("State: paused", "00:00")
+        session.send("l")
+        session.expect("State: paused", "00:05", "Help")
+        session.send("in")
+        session.expect("Track details", f"Now: Controls — Nav {third}", "State: playing")
+        session.send("\x1bL")
+        session.expect("Last.fm setup", "needs API credentials")
+        session.send("dq")
+        session.finish()
+
+
 def exercise_details_metadata(executable, audio, root):
     library = root / "details.ndjson"
     fifo = root / "not-audio-fifo"
@@ -340,7 +383,7 @@ def exercise_lastfm_setup(executable, library, root):
     environment = {"XDG_CONFIG_HOME": str(config)}
     with Session(executable, library, **environment) as session:
         session.expect("Last.fm: off", "Matches: 3")
-        session.send("\nl")
+        session.send("\nL")
         session.expect("Last.fm setup", "needs API credentials", "State: playing")
         session.send("\nxyz\n")
         session.expect("Enter exactly 32 hexadecimal characters.")
@@ -356,7 +399,7 @@ def exercise_lastfm_setup(executable, library, root):
         session.send("\x1b")
         session.resize(24, 100)
         session.expect("Matches: 3", "State: playing")
-        session.send("l")
+        session.send("L")
         session.expect("Last.fm setup", "needs API credentials")
         session.send("d")
         session.expect("Last.fm: off", "Matches: 3")
@@ -371,7 +414,7 @@ def exercise_lastfm_setup(executable, library, root):
     with Session(executable, library, **environment) as session:
         session.expect("Last.fm: needs credentials", "Library (Enter plays", "State: stopped")
         assert "Last.fm setup" not in session.screen.text()
-        session.send("l")
+        session.send("L")
         session.expect("Last.fm setup", "needs API credentials")
         session.send("d")
         session.expect("Last.fm: off", "Library (Enter plays")
@@ -490,6 +533,7 @@ def main():
         library = root / "library.ndjson"
         write_library(library, records)
         exercise_ui(options.player_binary, library)
+        exercise_queue_keys(options.player_binary, audio, root)
         exercise_details_metadata(options.player_binary, audio, root)
         exercise_settings(options.player_binary, library, root)
         exercise_lastfm_setup(options.player_binary, library, root)

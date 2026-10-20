@@ -2,10 +2,12 @@
 
 ## Unreleased
 
+- Moved Last.fm setup to uppercase `L`; added `h`/`l` seek aliases and enabled
+  `n`/`p` next/previous controls inside help/details, following shuffled queue history.
 - Reduced library construction allocations with allocation-free case-insensitive
   sorting while preserving existing ordering and first-match deduplication.
 - Restore enabled Last.fm in the background without automatically opening its menu
-  on launch; setup remains available with `l`.
+  on launch; setup remains available with `L`.
 - Export optional beatmap BPM and set import date during indexing; load missing
   track-details duration with a cancellable background local-file probe.
 - Added scrollable in-app help (`?`) and selected-track details (`i`), with

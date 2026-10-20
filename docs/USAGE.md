@@ -43,14 +43,14 @@ handled signals restore terminal settings.
 | Enter | Play selection |
 | Space | Pause/resume; start selection if nothing is loaded |
 | `n` / `p` | Next/previous in queue |
-| Left / Right | Seek backward/forward five seconds |
+| Left / Right, `h` / `l` | Seek backward/forward five seconds |
 | `+` / `-` | Volume in 5% steps |
 | `s` | Toggle shuffle |
 | `R` | Cycle repeat off → one → all |
 | `x` | Stop and rewind |
 | `r` | Refresh in background |
 | `d` | Toggle/setup Discord |
-| `l` | Open/setup Last.fm |
+| `L` (uppercase) | Open/setup Last.fm |
 | `?` / `i` | Open help / selected-track details |
 | `/` | Edit search |
 | Esc | Clear filter outside search mode |
@@ -84,7 +84,7 @@ large ones. Unicode text wraps by terminal cells and reflows on resize; scroll
 position is clamped to the available content. Below 50×14, resize to restore the panel.
 
 - **Scroll:** `j`/`k`, Up/Down, PageUp/PageDown, `g`/`G`, or Home/End.
-- **Playback:** Space, Left/Right, and `+`/`-` remain active. Other library actions,
+- **Playback:** Space, `n`/`p`, Left/Right or `h`/`l`, and `+`/`-` remain active. Other library actions,
   including Enter-to-play, are blocked while a panel is open.
 - **Close:** Esc, `q`, or the panel's opening key. `?`/`i` can switch between panels.
   Outside panels/search, `q` quits as usual.
@@ -99,6 +99,8 @@ sanitized and bounded, including local paths; unusually long fields may be trunc
 
 - **EOF:** advances automatically. Repeat-one affects EOF, not manual next/previous.
 - **Navigation:** manual next/previous starts playback even from pause/stop.
+  `n`/`p` follow the active queue, including shuffled order/history, not the filtered
+  library list. Moving forward again after previous retraces that queue without reshuffling.
 - **Shuffle:** preserves played history and the current track. Repeat-all reshuffles
   at a forward cycle boundary, avoiding an immediate duplicate when possible.
 - **Failed tracks:** skipped without automatic retries during that session;

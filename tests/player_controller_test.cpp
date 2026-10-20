@@ -193,6 +193,17 @@ void test_shuffle()
     first.controller.next();
     first.controller.previous();
     check(first.controller.current_index() == order.front(), "previous follows actual shuffle history");
+    for (std::size_t index = 1; index < order.size(); ++index) {
+        first.controller.next();
+        check(first.controller.current_index() == order[index], "manual next follows every shuffled queue entry");
+    }
+    first.controller.pause();
+    for (std::size_t index = order.size() - 1; index > 0; --index) {
+        first.controller.previous();
+        check(first.controller.current_index() == order[index - 1], "manual previous retraces shuffled history");
+        check(first.controller.state() == PlayerState::playing, "manual navigation starts playback from pause");
+    }
+    check(first.controller.queue() == order, "manual navigation does not reshuffle within a cycle");
     first.controller.play_track(order.back());
     first.controller.set_repeat(RepeatMode::all);
     first.controller.next();

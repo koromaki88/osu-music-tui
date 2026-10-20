@@ -39,14 +39,14 @@ disable/exit makes a best-effort clear. Abrupt termination cannot guarantee it.
 
 1. Get your own [application API key and shared secret](https://www.last.fm/api/account/create).
    Never share the secret in chat or logs.
-2. Press `l`, then Enter to enter your API key and masked shared secret.
+2. Press uppercase `L`, then Enter to enter your API key and masked shared secret.
 3. Open the displayed authorization URL in a browser and approve access. Return to
    the player and press Enter to finish. Never enter your Last.fm password in the player.
 
 Esc closes/cancels the panel while playback continues. Existing authorization remains
 usable after upgrading; integration setup does not require a library refresh.
 On launch, saved enablement reconnects in the background without opening the menu.
-Press `l` to view status or complete setup if credentials/authorization are needed.
+Press uppercase `L` to view status or complete setup if credentials/authorization are needed.
 
 | Key in Last.fm panel | Action |
 |---|---|

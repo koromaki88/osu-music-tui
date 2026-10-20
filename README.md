@@ -47,13 +47,13 @@ osu-player tui --osu-dir /path/to/osu-data
 | Enter | Play selection |
 | Space | Pause/resume |
 | `n` / `p` | Next/previous |
-| Left / Right | Seek five seconds |
+| Left / Right, `h` / `l` | Seek backward/forward five seconds |
 | `+` / `-` | Adjust volume |
 | `/` | Search |
 | `?` / `i` | Help / selected-track details |
 | `s` / `R` | Toggle shuffle / cycle repeat |
 | `r` | Refresh library (close lazer first) |
-| `d` / `l` | Discord / Last.fm setup |
+| `d` / `L` | Discord / Last.fm setup |
 | `q` | Quit |
 
 ## Build from source

@@ -186,16 +186,16 @@ std::vector<std::string> panel_content(const InfoPanel& panel)
             "/: search. Enter applies; Esc cancels edits or clears an applied filter.",
             "Search: Backspace removes a character; Ctrl-U clears. Filtering does not change the queue.", "",
             "PLAYBACK", "Space: pause/resume (start selection if nothing is loaded).",
-            "n/p: next/previous. Left/Right: seek five seconds. +/-: volume.",
+            "n/p: next/previous in queue (including shuffle). Left/Right or h/l: seek five seconds. +/-: volume.",
             "s: toggle shuffle. R: repeat off/one/all. x: stop and rewind.",
             "Playback never starts automatically on launch.", "",
             "LIBRARY AND INTEGRATIONS", "r: refresh. Close lazer first; live database snapshots are unsupported.",
             "d: toggle/setup Discord using your Application ID, not a bot token.",
-            "l: Last.fm setup. In that panel: c credentials, d disable, x local disconnect.",
+            "L: Last.fm setup. In that panel: c credentials, d disable, x local disconnect.",
             "Last.fm is opt-in; credentials and listening history are private plaintext files.", "",
             "PANELS", "?: help. i: selected-track details. Metadata is a snapshot; duration loads in background.",
             "j/k, arrows, PageUp/PageDown, Home/End: scroll this panel, not the library.",
-            "Space, Left/Right and +/- still control playback. Other library actions are blocked.",
+            "Space, n/p, Left/Right or h/l, and +/- still control playback. Other library actions are blocked.",
             "Esc or q: close panel. Outside panels/search: q quits.",
             "Resize at any time; text reflows. Below 50x14, resize to restore the panel."
         };
@@ -218,8 +218,6 @@ std::vector<std::string> panel_content(const InfoPanel& panel)
         "Filename: " + value(track.audio_filename), "Path: " + value(track.audio_path.string()),
         "", "Playback error: " + (panel.error.empty() ? std::string{"No recent error recorded for this track"} : panel.error),
         "If playback failed, check the audio file/output device and select the track to retry.",
-        "", "Metadata snapshot at panel open; audio duration loads in background. Reopen after refresh to update.",
-        "BPM is the indexed beatmap's tempo, not an audio-derived measurement. Added is the set's import date."
     };
     return lines;
 }
@@ -269,7 +267,7 @@ std::string_view lastfm_phase_name(const LastfmPhase phase)
         case LastfmPhase::needs_authorization: return "needs authorization";
         case LastfmPhase::awaiting_authorization: return "authorize in browser";
         case LastfmPhase::connected: return "connected";
-        case LastfmPhase::error: return "error (l for details)";
+        case LastfmPhase::error: return "error (L for details)";
     }
     return "unavailable";
 }
@@ -424,14 +422,14 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
          columns, A_NORMAL, colors ? 3 : 0);
     draw(rows - 2, 0, lastfm_setup.active ? "Get personal API credentials: https://www.last.fm/api/account/create" :
          discord_setup.active ? "Create an app: https://discord.com/developers/applications" :
-         panel.kind != InfoPanel::Kind::none ? "Space pause  Left/Right seek  +/- volume | Esc/q closes panel" :
+         panel.kind != InfoPanel::Kind::none ? "Space pause  n/p tracks  h/l seek  +/- volume | Esc/q closes panel" :
          "? help  i details  Enter play  Space pause  q quit", columns);
     draw(rows - 1, 0, lastfm_setup.active ? (!lastfm_status.authorization_url.empty() ?
          "Open the link in your browser, approve access, then press Enter." :
           "Credentials are private files, not encrypted. Playback continues while editing.") :
           discord_setup.active ? "Copy its Application ID. Playback continues while you edit." :
           panel.kind != InfoPanel::Kind::none ? "? help  i details | Enter does not play while a panel is open" :
-          "Left/Right seek  +/- volume  s shuffle  R repeat  x stop  r refresh  d Discord  l Last.fm", columns);
+          "h/l or arrows seek  n/p tracks  +/- volume  s shuffle  R repeat  x stop  r refresh  d Discord  L Last.fm", columns);
     wnoutrefresh(stdscr);
     doupdate();
 }
@@ -471,6 +469,8 @@ bool normal_key(const wint_t key, const bool special, PlayerController& player,
             break;
         case 'n': player.next(); break;
         case 'p': player.previous(); break;
+        case 'h': player.seek(player.position() - std::chrono::seconds{5}); break;
+        case 'l': player.seek(player.position() + std::chrono::seconds{5}); break;
         case 'x': player.stop(); break;
         case '+': case '=': player.set_volume(std::min(1.0F, player.volume() + 0.05F)); break;
         case '-': player.set_volume(std::max(0.0F, player.volume() - 0.05F)); break;
@@ -670,10 +670,11 @@ int run_tui_command(RefreshOptions options)
                     } else if ((special && key == KEY_HOME) || (!special && key == 'g')) { panel.scroll = 0; }
                     else if ((special && key == KEY_END) || (!special && key == 'G')) { panel.scroll = panel.maximum; }
                     else if ((special && (key == KEY_LEFT || key == KEY_RIGHT)) ||
-                             (!special && (key == ' ' || key == '+' || key == '=' || key == '-'))) {
+                             (!special && (key == ' ' || key == '+' || key == '=' || key == '-' ||
+                                           key == 'h' || key == 'l' || key == 'n' || key == 'p'))) {
                         running = normal_key(key, special, player, view, searching, saved_query);
                     }
-                } else if (result != KEY_CODE_YES && key == 'l') {
+                } else if (result != KEY_CODE_YES && key == 'L') {
                     if (lastfm) {
                         lastfm_enabled = true;
                         lastfm->configure(true);

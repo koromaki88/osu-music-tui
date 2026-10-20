@@ -143,7 +143,7 @@ def environment(server, ca, config):
 
 def setup(session):
     session.expect("State: stopped")
-    session.send("l")
+    session.send("L")
     session.expect("needs API credentials")
     session.send("\n" + KEY + "\n" + SECRET + "\n")
 
@@ -179,7 +179,7 @@ def exercise_lastfm_https(executable, root, openssl="openssl"):
             while time.monotonic() < deadline and not server.parameters("track.scrobble"):
                 session.drain(0.1)
             assert len(server.parameters("track.scrobble")) == 1, "eligible fixture was not submitted via real HTTPS"
-            session.send("l")
+            session.send("L")
             session.expect("Scrobble accepted", "pending: 0")
             session.send("\x1bq")
             session.finish()
@@ -195,7 +195,7 @@ def exercise_lastfm_https(executable, root, openssl="openssl"):
             assert "Last.fm setup" not in session.screen.text(), "restoring authorization must not open setup"
             session.send("?")
             session.expect("Help", "State: stopped")
-            session.send("\x1bl")
+            session.send("\x1bL")
             session.expect("Last.fm setup", "connected")
             session.send("\x1bq")
             session.finish()
