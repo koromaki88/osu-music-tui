@@ -36,6 +36,9 @@ public:
 
     void play();
     void play_track(std::size_t library_index);
+    // Explicitly start a new playback scope. Validation is transactional; next,
+    // previous, repeat and shuffle remain within this ordered, unique subset.
+    void play_queue(std::vector<std::size_t> indices, std::size_t selected, bool restricted = true);
     void pause();
     void stop();
     void next();
@@ -77,6 +80,8 @@ private:
     Library library_;
     std::unique_ptr<AudioPlayer> audio_;
     std::vector<std::size_t> queue_;
+    std::vector<std::size_t> queue_order_;
+    bool restricted_queue_{};
     std::vector<bool> failed_tracks_;
     std::optional<std::size_t> cursor_;
     std::mt19937 random_;

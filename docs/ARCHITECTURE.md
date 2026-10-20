@@ -89,6 +89,28 @@ and a five-second interrupt deadline. This is not a hard deadline for uninterrup
 kernel/filesystem I/O. Unknown/error results remain explicit; refresh does not probe
 the whole library and probe results are not persisted in the library cache.
 
+## Collections and scoped queues
+
+`collections.hpp/.cpp` owns one sleeping worker, a bounded FIFO edit mailbox, and
+immutable shared snapshots. Private storage is descriptor-anchored, exclusively
+locked, bounded, UTF-8/version validated, and atomically replaced with file/directory
+fsync. Changes become visible only after saving; failures retain the previous
+snapshot. Save checks detect external content edits. UI snapshot polling is limited
+to the existing 100 ms rendering cadence; no disk I/O runs on the control thread.
+
+References pair stable ID with audio hash. Resolution is explicit and preserves
+saved order while retaining unavailable members in storage. `LibraryView` intersects
+search with an optional ordered scope without changing playback. `play_queue`
+validates unique indices/selection before replacing the active queue; a separate
+canonical order restores playlist order when shuffle is disabled. Refresh remaps
+the scoped queue by identity without appending unrelated library entries. Failure
+flags remain indexed by the full library, not by subset size. Saved edits affect
+future queue snapshots rather than interrupting active playback.
+
+Unit and PTY tests cover persistence, limits, locks/unsafe links, failed saves,
+external/directory replacement, missing references, list editing, resize, no autoplay,
+shuffle/history/repeat, and scope-preserving refresh.
+
 ## Playback events and listening time
 
 ### Event contract

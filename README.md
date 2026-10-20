@@ -51,6 +51,8 @@ osu-player tui --osu-dir /path/to/osu-data
 | `+` / `-` | Adjust volume |
 | `/` | Search |
 | `?` / `i` | Help / selected-track details |
+| `f` / `F` | Toggle favorite / browse favorites |
+| `P` / `b` | Playlists / full library |
 | `s` / `R` | Toggle shuffle / cycle repeat |
 | `r` | Refresh library (close lazer first) |
 | `d` / `L` | Discord / Last.fm setup |

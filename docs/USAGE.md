@@ -52,6 +52,9 @@ handled signals restore terminal settings.
 | `d` | Toggle/setup Discord |
 | `L` (uppercase) | Open/setup Last.fm |
 | `?` / `i` | Open help / selected-track details |
+| `f` / `F` | Toggle selected favorite / favorites-library view |
+| `P` / `b` | Open playlists / browse full library |
+| `u`, `<` / `>` | In a playlist: remove selection, move earlier/later |
 | `/` | Edit search |
 | Esc | Clear filter outside search mode |
 | `q` | Quit outside search mode |
@@ -107,6 +110,66 @@ sanitized and bounded, including local paths; unusually long fields may be trunc
   explicit selection retries them.
 - **Device failures:** stop playback. The TUI stays open after errors or queue completion.
 
+## Favorites and playlists
+
+Press `f` to toggle the selected track's favorite marker, or `F` to browse favorites.
+Press `F` again or `b` to return to the full library. Search still applies within
+the current view; changing views never interrupts the playing track.
+
+Press uppercase `P` to manage named playlists. The panel captures the library
+selection as its add target; close it and select another track to change that target.
+Playlist names are case-sensitive, can contain Unicode, and are limited to 128 bytes.
+
+| Key in playlists panel | Action |
+|---|---|
+| `j` / `k`, Up / Down | Select playlist |
+| PageUp / PageDown, `g` / `G`, Home / End | Page or jump through playlists |
+| `c` | Create a playlist; type its name and press Enter |
+| `a` | Add the captured track to the selected playlist (duplicates ignored) |
+| Enter | Browse the selected playlist without starting playback |
+| `r` | Rename; Ctrl-U clears, Enter saves, Esc cancels |
+| `x` | Delete selected playlist; `y` confirms, any other key cancels |
+| `b` | Close panel and browse the full library |
+| Esc / `q` / `P` | Close panel |
+
+In a playlist's track browser, `u` removes the selected member; `<`/`>` moves it
+earlier/later. New tracks append in insertion order. The playlists panel reflows
+on resize and keeps its selected list visible, including at 50×14. Name editing
+captures ordinary keys rather than triggering playback shortcuts.
+
+### List playback
+
+Press Enter on a track to start its **entire list's queue**, independent of the
+search filter. Next/previous, shuffle, and repeat stay inside that queue. Shuffle
+off restores the playlist's saved order, not global library order. Favorites use
+the order in which tracks were favorited.
+
+Browsing, renaming, deleting, or editing a saved list does not mutate the active
+queue. That queue is a snapshot until Enter starts a list again; its name appears
+in the playback status. Space resumes the active queue even when browsing elsewhere.
+Refresh retains surviving queued tracks and never adds unrelated tracks to a list
+queue. Missing/changed tracks stay saved but are omitted when resolving a list;
+restoring the same stable ID and audio hash makes them available again.
+
+### Storage and recovery
+
+Lists live in `~/.config/osu-player/collections/lists.json` (or under an absolute
+`$XDG_CONFIG_HOME`). They are separate from preferences, Last.fm, and lazer's files.
+Only track IDs/hashes, membership/order, and playlist names are stored—no audio paths
+or credentials. This is private plaintext, not encrypted storage.
+
+An owned background worker loads/saves the file. Edits become visible after an
+atomic save succeeds; failures appear in the status line without replacing the
+previous list. Normal exit flushes accepted edits; abrupt termination can lose edits
+not yet saved. Directory/file modes are 0700/0600; unsafe types, links, malformed/newer
+files, and detected external edits are preserved rather than overwritten. Only one
+player instance can own collections; other instances keep ordinary playback usable
+but report collections unavailable. Restart after fixing storage or external edits.
+
+Limits are 128 playlists, 10,000 favorites, 10,000 members per playlist, 50,000 total
+references, an 8 MiB file, and 64 pending edits. Capacity failures leave saved data
+intact. No view, queue, or autoplay state is restored on launch—only the saved lists.
+
 ## Refresh and cache
 
 After imports/removals, close lazer and press `r`. There is no automatic library
@@ -139,6 +202,7 @@ adapter processes and temporary copies.
 | Preferences | `~/.config/osu-player/settings.json` |
 | Last.fm credentials | `~/.config/osu-player/lastfm/credentials.json` |
 | Last.fm listening outbox | `~/.config/osu-player/lastfm/scrobbles.json` |
+| Favorites and playlists | `~/.config/osu-player/collections/lists.json` |
 | Library cache | `~/.cache/osu-music-player/` |
 
 Config files use an absolute `$XDG_CONFIG_HOME` when set.

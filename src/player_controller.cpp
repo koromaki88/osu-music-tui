@@ -18,6 +18,7 @@ PlayerController::PlayerController(Library library, std::unique_ptr<AudioPlayer>
     queue_.resize(library_.tracks().size());
     failed_tracks_.resize(queue_.size(), false);
     std::iota(queue_.begin(), queue_.end(), std::size_t{0});
+    queue_order_ = queue_;
     if (!queue_.empty()) {
         state_ = PlayerState::stopped;
     }
@@ -57,8 +58,40 @@ void PlayerController::play_track(const std::size_t library_index)
         throw std::out_of_range{"track index is outside the library"};
     }
     const auto found = std::find(queue_.begin(), queue_.end(), library_index);
+    if (found == queue_.end()) {
+        std::vector<std::size_t> indices(library_.tracks().size());
+        std::iota(indices.begin(), indices.end(), std::size_t{0});
+        play_queue(std::move(indices), library_index, false);
+        return;
+    }
     failed_tracks_[library_index] = false; // Explicit selection retries this track.
     start_from(static_cast<std::size_t>(found - queue_.begin()), false, repeat_ == RepeatMode::all);
+}
+
+void PlayerController::play_queue(std::vector<std::size_t> indices, const std::size_t selected, const bool restricted)
+{
+    std::vector<bool> seen(library_.tracks().size(), false);
+    for (const auto index : indices) {
+        if (index >= seen.size() || seen[index]) { throw std::invalid_argument{"invalid playback queue"}; }
+        seen[index] = true;
+    }
+    if (selected >= seen.size() || !seen[selected]) { throw std::invalid_argument{"selection is outside playback queue"}; }
+    auto order = indices;
+    std::size_t position = static_cast<std::size_t>(std::find(indices.begin(), indices.end(), selected) - indices.begin());
+    if (shuffle_) {
+        std::swap(indices.front(), indices[position]);
+        std::shuffle(indices.begin() + 1, indices.end(), random_);
+        position = 0;
+    }
+    // End the old session before changing the meaning of its cursor.
+    audio_->pause();
+    end_playback(PlaybackEndReason::replaced);
+    cursor_.reset();
+    queue_order_ = std::move(order);
+    queue_ = std::move(indices);
+    restricted_queue_ = restricted;
+    std::fill(failed_tracks_.begin(), failed_tracks_.end(), false);
+    start_from(position, false, repeat_ == RepeatMode::all);
 }
 
 void PlayerController::pause()
@@ -193,9 +226,8 @@ void PlayerController::set_shuffle(const bool enabled)
         const auto offset = cursor_ ? *cursor_ + 1 : 0;
         std::shuffle(queue_.begin() + static_cast<std::ptrdiff_t>(offset), queue_.end(), random_);
     } else {
-        std::iota(queue_.begin(), queue_.end(), std::size_t{0});
-        // Canonical queue order matches library indices directly.
-        cursor_ = current;
+        queue_ = queue_order_;
+        if (current) { cursor_ = static_cast<std::size_t>(std::find(queue_.begin(), queue_.end(), *current) - queue_.begin()); }
     }
 }
 
@@ -209,6 +241,16 @@ void PlayerController::replace_library(Library library)
         indices.emplace(identity(library.tracks()[index]), index);
     }
     std::vector<std::size_t> queue;
+    std::vector<std::size_t> order;
+    if (restricted_queue_) {
+        for (const auto index : queue_order_) {
+            const auto found = indices.find(identity(library_.tracks()[index]));
+            if (found != indices.end()) { order.push_back(found->second); }
+        }
+    } else {
+        order.resize(library.tracks().size());
+        std::iota(order.begin(), order.end(), std::size_t{0});
+    }
     queue.reserve(library.tracks().size());
     std::vector<bool> used(library.tracks().size(), false);
     std::optional<std::size_t> current;
@@ -227,7 +269,7 @@ void PlayerController::replace_library(Library library)
         }
     }
     const auto existing = queue.size();
-    for (std::size_t index = 0; index < used.size(); ++index) {
+    for (const auto index : order) {
         if (!used[index]) { queue.push_back(index); }
     }
     if (shuffle_) {
@@ -237,13 +279,14 @@ void PlayerController::replace_library(Library library)
     if (current) {
         cursor = static_cast<std::size_t>(std::find(queue.begin(), queue.end(), *current) - queue.begin());
     }
-    std::vector<bool> failures(queue.size(), false); // Refresh retries repaired files.
+    std::vector<bool> failures(library.tracks().size(), false); // Indexed by library, not subset.
     if (!current) {
         audio_->pause();
         end_playback(PlaybackEndReason::removed);
     }
     library_ = std::move(library);
     queue_ = std::move(queue);
+    queue_order_ = std::move(order);
     failed_tracks_ = std::move(failures);
     cursor_ = cursor;
     if (!current) { state_ = queue_.empty() ? PlayerState::empty : PlayerState::stopped; }

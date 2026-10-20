@@ -90,6 +90,21 @@ void test_filtering_and_empty_results()
     check(!empty_view.selected_index(), "empty library cannot acquire a selection");
 }
 
+void test_scoped_view()
+{
+    const auto library = make_library(20);
+    const auto unique = library.search("Unique").front();
+    osu_player::LibraryView view{library};
+    view.set_scope(std::vector<std::size_t>{8,2,unique});
+    check(view.matches()==std::vector<std::size_t>({8,2,unique}),"browser preserves playlist order");
+    view.set_query("Unique");
+    check(view.matches()==std::vector<std::size_t>{unique},"search intersects scope without adding unrelated results");
+    view.set_query(""); view.set_scope(std::vector<std::size_t>{});
+    check(view.matches().empty() && !view.selected_index(),"empty favorites/playlist has no selection");
+    view.set_scope(std::nullopt);
+    check(view.matches().size()==20,"full library restored independently of queue");
+}
+
 void test_terminal_text()
 {
     using osu_player::wrap_terminal_text;
@@ -150,6 +165,7 @@ int main()
         }
         test_selection_and_viewport();
         test_filtering_and_empty_results();
+        test_scoped_view();
         test_terminal_text();
         test_refreshed_view();
         std::cout << "all TUI model/text tests passed\n";

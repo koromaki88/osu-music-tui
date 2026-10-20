@@ -52,6 +52,7 @@ add_library(osu_player_core
     src/terminal_text.cpp
     src/library_refresh.cpp
     src/settings.cpp
+    src/collections.cpp
 )
 
 target_include_directories(osu_player_core PUBLIC include)
@@ -88,6 +89,12 @@ if(BUILD_TESTING)
     osu_player_set_warnings(library-tests)
     osu_player_enable_sanitizers(library-tests)
     add_test(NAME library COMMAND library-tests)
+
+    add_executable(collections-tests tests/collections_test.cpp)
+    target_link_libraries(collections-tests PRIVATE osu_player_core)
+    osu_player_set_warnings(collections-tests)
+    osu_player_enable_sanitizers(collections-tests)
+    add_test(NAME collections COMMAND collections-tests)
 
     add_executable(player-controller-tests tests/player_controller_test.cpp)
     target_link_libraries(player-controller-tests PRIVATE osu_player_core)
@@ -129,6 +136,8 @@ if(BUILD_TESTING)
     add_test(NAME tui-model COMMAND tui-model-tests)
     add_test(NAME tui COMMAND Python3::Interpreter
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tui_integration.py --player-binary $<TARGET_FILE:osu-player>)
+    add_test(NAME collections-ui COMMAND Python3::Interpreter
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/collections_integration.py --player-binary $<TARGET_FILE:osu-player>)
     add_test(NAME refresh COMMAND Python3::Interpreter
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/refresh_integration.py --player-binary $<TARGET_FILE:osu-player>)
 

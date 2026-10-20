@@ -222,6 +222,41 @@ void test_shuffle()
           "disabling shuffle restores canonical order while preserving song");
 }
 
+void test_scoped_queue()
+{
+    Fixture fixture{8};
+    auto& player = fixture.controller;
+    player.play_track(0);
+    const auto before = player.queue();
+    try { player.play_queue({5,5},5); check(false,"duplicate queue must fail"); }
+    catch (const std::invalid_argument&) { }
+    check(player.current_index()==0 && player.queue()==before, "invalid scope cannot alter playback");
+    player.play_queue({6,2,4},6);
+    check(player.queue()==std::vector<std::size_t>({6,2,4}), "playlist insertion order is canonical");
+    player.next(); check(player.current_index()==2,"next remains within playlist");
+    player.set_shuffle(true);
+    player.next(); check(player.current_index()==4,"shuffle preserves current/history and remaining scope");
+    player.previous(); check(player.current_index()==2,"previous follows scoped shuffle history");
+    player.set_shuffle(false);
+    check(player.queue()==std::vector<std::size_t>({6,2,4}) && player.current_index()==2,"shuffle off restores playlist order, not library order");
+    player.set_repeat(RepeatMode::all);
+    player.play_track(4); player.next(); check(player.current_index()==6,"repeat-all wraps within playlist");
+    player.set_shuffle(true);
+    player.play_queue({6,2,4},2);
+    check(player.current_index()==2 && player.queue().front()==2,"explicit shuffled playlist starts selected track");
+    player.replace_library(make_library(10));
+    auto sorted=player.queue(); std::ranges::sort(sorted);
+    check(sorted==std::vector<std::size_t>({2,4,6}),"refresh cannot append unrelated library entries to scoped queue");
+    player.replace_library(make_library(3));
+    check(player.queue()==std::vector<std::size_t>{2},"refresh removes absent playlist tracks safely");
+    player.play_track(0);
+    check(player.current_index()==0 && player.queue().size()==3,"explicit outside selection restores full library safely");
+    player.play_queue({2},2);
+    player.replace_library(make_library(2));
+    check(player.queue().empty() && !player.current_index() && player.state()==PlayerState::empty,
+        "removing all scoped tracks leaves an empty queue without autoplaying outsiders");
+}
+
 void test_load_play_and_runtime_failures()
 {
     Fixture fixture{4};
@@ -411,6 +446,7 @@ int main()
         test_transport();
         test_eof_and_repeat();
         test_shuffle();
+        test_scoped_queue();
         test_load_play_and_runtime_failures();
         test_large_broken_queue_and_error_bound();
         test_directional_failure_skipping();

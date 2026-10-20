@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <utility>
+#include <stdexcept>
 
 namespace osu_player {
 
@@ -15,7 +16,7 @@ void LibraryView::set_query(std::string query)
     }
     const auto previous = selected_index();
     query_ = std::move(query);
-    matches_ = library_.search(query_);
+    rebuild();
     selected_ = 0;
     if (previous) {
         const auto found = std::find(matches_.begin(), matches_.end(), *previous);
@@ -59,9 +60,31 @@ void LibraryView::page_down()
 }
 
 const std::string& LibraryView::query() const noexcept { return query_; }
-void LibraryView::refresh(const std::string_view selected_stable_id)
+void LibraryView::set_scope(std::optional<std::vector<std::size_t>> indices, const std::string_view selected_stable_id)
+{
+    if (indices) {
+        std::vector<bool> seen(library_.tracks().size(), false);
+        for (const auto index : *indices) {
+            if (index >= seen.size() || seen[index]) { throw std::invalid_argument{"invalid browser scope"}; }
+            seen[index] = true;
+        }
+    }
+    scope_ = std::move(indices);
+    top_ = 0; refresh(selected_stable_id);
+}
+const std::optional<std::vector<std::size_t>>& LibraryView::scope() const noexcept { return scope_; }
+void LibraryView::rebuild()
 {
     matches_ = library_.search(query_);
+    if (!scope_) { return; }
+    std::vector<bool> matches(library_.tracks().size(), false);
+    for (const auto index : matches_) { matches[index] = true; }
+    matches_.clear();
+    for (const auto index : *scope_) { if (index < matches.size() && matches[index]) { matches_.push_back(index); } }
+}
+void LibraryView::refresh(const std::string_view selected_stable_id)
+{
+    rebuild();
     selected_ = 0;
     for (std::size_t row = 0; row < matches_.size(); ++row) {
         if (library_.tracks()[matches_[row]].stable_id == selected_stable_id) {

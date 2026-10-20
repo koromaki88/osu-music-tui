@@ -17,6 +17,8 @@ class LibraryView {
 public:
     explicit LibraryView(const Library& library);
     void set_query(std::string query);
+    void set_scope(std::optional<std::vector<std::size_t>> indices, std::string_view selected_stable_id = {});
+    [[nodiscard]] const std::optional<std::vector<std::size_t>>& scope() const noexcept;
     void set_page_size(std::size_t rows);
     void move(int delta);
     void home();
@@ -34,10 +36,12 @@ public:
 
 private:
     void ensure_visible();
+    void rebuild();
 
     const Library& library_;
     std::string query_;
     std::vector<std::size_t> matches_;
+    std::optional<std::vector<std::size_t>> scope_;
     std::size_t selected_{};
     std::size_t top_{};
     std::size_t page_size_{1};

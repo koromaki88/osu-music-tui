@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added local favorites (`f`/`F`) and named playlists (`P`): persistent background
+  saves, add/remove/reorder, rename/delete confirmation, and missing-track retention.
+- List playback uses dedicated queue snapshots: next/previous, shuffle and repeat
+  stay in the chosen list; browsing/editing never interrupts playback.
 ## 0.4.1
 
 - Moved Last.fm setup to uppercase `L`; added `h`/`l` seek aliases and enabled

@@ -7,6 +7,7 @@
 #include "osu_player/discord_presence.hpp"
 #include "osu_player/lastfm_presence.hpp"
 #include "osu_player/terminal_text.hpp"
+#include "osu_player/collections.hpp"
 #include "track_details_probe.hpp"
 
 #include <curses.h>
@@ -24,6 +25,7 @@ extern "C" {
 #include <cstdint>
 #include <cwctype>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iterator>
 #include <memory>
@@ -164,7 +166,8 @@ struct DiscordSetup {
 };
 
 struct InfoPanel {
-    enum class Kind { none, help, details };
+    enum class Kind { none, help, details, playlists };
+    enum class NameEdit { none, create, rename };
     Kind kind{Kind::none};
     std::optional<Track> track;
     std::optional<AudioPlayer::Milliseconds> duration;
@@ -175,10 +178,28 @@ struct InfoPanel {
     std::size_t page{1};
     int wrapped_width{};
     std::vector<std::string> lines;
+    std::size_t playlist_row{};
+    NameEdit name_edit{NameEdit::none};
+    std::string input;
+    std::string target_name;
+    bool confirm_delete{};
+    bool follow_selection{true};
 };
 
-std::vector<std::string> panel_content(const InfoPanel& panel)
+std::vector<std::string> panel_content(const InfoPanel& panel, const CollectionsStatus& collections)
 {
+    if (panel.kind == InfoPanel::Kind::playlists) {
+        std::vector<std::string> lines{
+            "Enter browse | a add selected track | c create", "r rename | x delete (confirm) | b full library | Esc close",
+            collections.message + " | pending: " + std::to_string(collections.pending),
+            panel.track ? "Add target: " + panel.track->display_artist() + " — " + panel.track->display_title() : "No selected track to add", ""};
+        if (collections.data->playlists.empty()) { lines.push_back("No playlists yet. Press c to create one."); }
+        for (std::size_t i = 0; i < collections.data->playlists.size(); ++i) {
+            const auto& list = collections.data->playlists[i];
+            lines.push_back(std::string{i == panel.playlist_row ? "> " : "  "} + list.name + " [" + std::to_string(list.tracks.size()) + " saved]");
+        }
+        return lines;
+    }
     if (panel.kind == InfoPanel::Kind::help) {
         return {
             "BROWSE AND SEARCH", "j/k or Up/Down: select track. Enter: play selection.",
@@ -193,6 +214,11 @@ std::vector<std::string> panel_content(const InfoPanel& panel)
             "d: toggle/setup Discord using your Application ID, not a bot token.",
             "L: Last.fm setup. In that panel: c credentials, d disable, x local disconnect.",
             "Last.fm is opt-in; credentials and listening history are private plaintext files.", "",
+            "FAVORITES AND PLAYLISTS", "f: toggle favorite. F: favorites/library view. b: full library. P: playlists.",
+            "In playlists: c create, a add selected track, r rename, x delete (confirm), Enter browse.",
+            "In a playlist browser: u removes selection; < and > move it earlier/later.",
+            "Browsing never interrupts playback. Enter starts that list's full queue, independent of search.",
+            "Edits affect the browser/saved list; the active queue is a snapshot until Enter plays a list again.", "",
             "PANELS", "?: help. i: selected-track details. Metadata is a snapshot; duration loads in background.",
             "j/k, arrows, PageUp/PageDown, Home/End: scroll this panel, not the library.",
             "Space, n/p, Left/Right or h/l, and +/- still control playback. Other library actions are blocked.",
@@ -222,14 +248,14 @@ std::vector<std::string> panel_content(const InfoPanel& panel)
     return lines;
 }
 
-void render_panel(InfoPanel& panel, const int rows, const int columns, const bool colors)
+void render_panel(InfoPanel& panel, const int rows, const int columns, const bool colors, const CollectionsStatus& collections)
 {
     const int width = std::min(columns - 2, 96);
     const int left = (columns - width) / 2;
     const int height = rows - 10;
     if (panel.wrapped_width != width) {
         panel.lines.clear();
-        for (const auto& paragraph : panel_content(panel)) {
+        for (const auto& paragraph : panel_content(panel, collections)) {
             auto wrapped = wrap_terminal_text(paragraph, width);
             panel.lines.insert(panel.lines.end(), std::make_move_iterator(wrapped.begin()), std::make_move_iterator(wrapped.end()));
         }
@@ -239,8 +265,22 @@ void render_panel(InfoPanel& panel, const int rows, const int columns, const boo
     panel.page = static_cast<std::size_t>(height);
     panel.maximum = lines.size() > panel.page ? lines.size() - panel.page : 0;
     panel.scroll = std::min(panel.scroll, panel.maximum);
-    draw(2, left, panel.kind == InfoPanel::Kind::help ? "Help" : "Track details (selected track)", width, A_BOLD, colors ? 1 : 0);
-    draw(3, left, "Esc/q close | j/k scroll | " + std::to_string(panel.scroll + 1) + "-" +
+    if (panel.kind == InfoPanel::Kind::playlists && panel.follow_selection) {
+        for (std::size_t i = 0; i < lines.size(); ++i) {
+            if (lines[i].starts_with("> ")) {
+                if (i < panel.scroll) { panel.scroll = i; }
+                else if (i >= panel.scroll + panel.page) { panel.scroll = i - panel.page + 1; }
+                break;
+            }
+        }
+        panel.follow_selection = false;
+    }
+    draw(2, left, panel.kind == InfoPanel::Kind::help ? "Help" : panel.kind == InfoPanel::Kind::playlists ? "Playlists" : "Track details (selected track)", width, A_BOLD, colors ? 1 : 0);
+    const auto input_lines = panel.name_edit != InfoPanel::NameEdit::none ? wrap_terminal_text(panel.input + "_", width - 10) : std::vector<std::string>{};
+    const auto input_line = input_lines.empty() ? std::string{} : "Name: " + std::string{input_lines.size() > 1 ? "..." : ""} + input_lines.back();
+    draw(3, left, panel.name_edit != InfoPanel::NameEdit::none ? input_line :
+         panel.confirm_delete ? "Delete playlist? y confirms; any other key cancels" :
+         std::string{panel.kind == InfoPanel::Kind::playlists ? "Esc/q close | j/k select | " : "Esc/q close | j/k scroll | "} + std::to_string(panel.scroll + 1) + "-" +
          std::to_string(std::min(lines.size(), panel.scroll + panel.page)) + "/" + std::to_string(lines.size()), width);
     for (std::size_t row = 0; row < panel.page && panel.scroll + row < lines.size(); ++row) {
         draw(4 + static_cast<int>(row), left, lines[panel.scroll + row], width);
@@ -334,7 +374,8 @@ SetupResult discord_setup_key(const wint_t key, const bool special, DiscordSetup
 void render(const PlayerController& player, const LibraryView& view, const bool searching,
             const std::string& notice, const bool colors, const bool refreshing, const std::string& discord_status,
             const DiscordSetup& discord_setup, const LastfmStatus& lastfm_status, const LastfmSetup& lastfm_setup,
-            InfoPanel& panel)
+            InfoPanel& panel, const CollectionsStatus& collections, const std::string& browse_source,
+            const std::string& queue_source)
 {
     int rows{};
     int columns{};
@@ -355,14 +396,15 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
     const std::string summary = "Library: " + std::to_string(player.library().tracks().size()) +
         " | Matches: " + std::to_string(view.matches().size()) +
         " | Shuffle: " + (player.shuffle() ? "on" : "off") +
-        " | Repeat: " + std::string{repeat_name(player.repeat())} + (refreshing ? " | Index: running" : "");
+         " | Repeat: " + std::string{repeat_name(player.repeat())} + (refreshing ? " | Index: running" : "");
     draw(1, 0, summary, columns);
     if (panel.kind == InfoPanel::Kind::none) {
         draw(2, 0, discord_setup.active ? "Discord Application ID: " + discord_setup.input + "_" :
              "Search: " + view.query() + (searching ? "_  [Enter apply / Esc cancel]" : ""),
              columns, searching ? A_BOLD : A_NORMAL);
         draw(3, 0, discord_setup.active ? "Enter save & enable | Esc cancel | Ctrl-U clear | Use Application ID, not token" :
-             "Library (Enter plays selection; * marks current track)", columns);
+             browse_source == "Library" ? "Library (Enter plays selection; * marks current track)" :
+             "View: " + browse_source + " | Enter plays this list | * current", columns);
     }
 
     const auto visible_rows = static_cast<std::size_t>(rows - 10);
@@ -376,6 +418,7 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
         const bool current = player.current_index() == index;
         const std::string line = std::string{match_row == view.selected_row() ? "> " : "  "} +
             (current ? "* " : "  ") + std::to_string(index + 1) + "  " +
+            (collections.data->favorite(track) ? "[fav] " : "") +
             track.display_artist() + " — " + track.display_title();
         attr_t attributes = match_row == view.selected_row() ? A_REVERSE : A_NORMAL;
         if (current) {
@@ -383,7 +426,7 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
         }
         draw(4 + static_cast<int>(offset), 0, line, columns, attributes, colors && current ? 2 : 0);
     }
-    if (panel.kind != InfoPanel::Kind::none) { render_panel(panel, rows, columns, colors); }
+    if (panel.kind != InfoPanel::Kind::none) { render_panel(panel, rows, columns, colors, collections); }
 
     if (lastfm_setup.active) {
         draw(2, 0, std::string(static_cast<std::size_t>(columns - 1), ' '), columns);
@@ -409,7 +452,7 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
     const auto duration = player.duration();
     draw(rows - 5, 0, "State: " + std::string{state_name(player.state())} + " | " +
          format_time(player.position()) + " / " + (duration ? format_time(*duration) : "--:--") +
-         " | Volume: " + std::to_string(static_cast<int>(player.volume() * 100.0F + 0.5F)) + "%", columns);
+         " | Volume: " + std::to_string(static_cast<int>(player.volume() * 100.0F + 0.5F)) + "% | Queue: " + queue_source, columns);
     const int bar_width = columns - 4;
     const double fraction = duration && duration->count() > 0
         ? std::clamp(static_cast<double>(player.position().count()) / static_cast<double>(duration->count()), 0.0, 1.0)
@@ -422,20 +465,23 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
          columns, A_NORMAL, colors ? 3 : 0);
     draw(rows - 2, 0, lastfm_setup.active ? "Get personal API credentials: https://www.last.fm/api/account/create" :
          discord_setup.active ? "Create an app: https://discord.com/developers/applications" :
+         panel.name_edit != InfoPanel::NameEdit::none ? "Enter save | Esc cancel | Ctrl-U clear | Playback continues" :
+         panel.confirm_delete ? "y confirms deletion | any other key cancels | Playback continues" :
          panel.kind != InfoPanel::Kind::none ? "Space pause  n/p tracks  h/l seek  +/- volume | Esc/q closes panel" :
          "? help  i details  Enter play  Space pause  q quit", columns);
     draw(rows - 1, 0, lastfm_setup.active ? (!lastfm_status.authorization_url.empty() ?
          "Open the link in your browser, approve access, then press Enter." :
           "Credentials are private files, not encrypted. Playback continues while editing.") :
           discord_setup.active ? "Copy its Application ID. Playback continues while you edit." :
+          panel.kind == InfoPanel::Kind::playlists ? "c new  a add  r rename  x delete  Enter browse  b all" :
           panel.kind != InfoPanel::Kind::none ? "? help  i details | Enter does not play while a panel is open" :
-          "h/l or arrows seek  n/p tracks  +/- volume  s shuffle  R repeat  x stop  r refresh  d Discord  L Last.fm", columns);
+          "f favorite  F favorites  P playlists  b all | h/l seek  n/p tracks  s shuffle  R repeat  L Last.fm", columns);
     wnoutrefresh(stdscr);
     doupdate();
 }
 
 bool normal_key(const wint_t key, const bool special, PlayerController& player,
-                LibraryView& view, bool& searching, std::string& saved_query)
+                LibraryView& view, bool& searching, std::string& saved_query, const std::function<void()>& play_selection)
 {
     if (special) {
         switch (key) {
@@ -448,7 +494,7 @@ bool normal_key(const wint_t key, const bool special, PlayerController& player,
             case KEY_LEFT: player.seek(player.position() - std::chrono::seconds{5}); return true;
             case KEY_RIGHT: player.seek(player.position() + std::chrono::seconds{5}); return true;
             case KEY_ENTER:
-                if (const auto selected = view.selected_index()) { player.play_track(*selected); }
+                play_selection();
                 return true;
             default: return true;
         }
@@ -460,12 +506,12 @@ bool normal_key(const wint_t key, const bool special, PlayerController& player,
         case 'g': view.home(); break;
         case 'G': view.end(); break;
         case '\n': case '\r':
-            if (const auto selected = view.selected_index()) { player.play_track(*selected); }
+            play_selection();
             break;
         case ' ':
             if (player.state() == PlayerState::playing) { player.pause(); }
             else if (player.current_index()) { player.play(); }
-            else if (const auto selected = view.selected_index()) { player.play_track(*selected); }
+            else { play_selection(); }
             break;
         case 'n': player.next(); break;
         case 'p': player.previous(); break;
@@ -567,9 +613,77 @@ int run_tui_command(RefreshOptions options)
     std::uint64_t detail_generation{};
     std::optional<TrackError> latest_track_error;
     std::string saved_query;
+    std::unique_ptr<CollectionsStore> collections_store;
+    CollectionsStatus collections{std::make_shared<Collections>(), true, false, 0, "Collections unavailable"};
+    try { collections_store = std::make_unique<CollectionsStore>(settings_path().parent_path() / "collections/lists.json"); }
+    catch (const std::exception&) { }
+    enum class Browse { library, favorites, playlist };
+    Browse browse = Browse::library;
+    std::string playlist_name;
+    std::string queue_source{"Library"};
+    std::optional<std::pair<std::string, std::string>> pending_rename;
+    const auto source_name = [&] { return browse == Browse::library ? std::string{"Library"} :
+        browse == Browse::favorites ? std::string{"Favorites"} : "Playlist: " + playlist_name; };
+    const auto apply_scope = [&](const std::string& selected) {
+        if (browse == Browse::library) { view.set_scope(std::nullopt, selected); }
+        else { view.set_scope(collections.data->resolve(player.library(), browse == Browse::favorites, playlist_name), selected); }
+    };
+    const auto select_source = [&](const Browse next, std::string name = {}) {
+        std::string selected;
+        if (const auto index = view.selected_index()) { selected = player.library().tracks()[*index].stable_id; }
+        browse = next; playlist_name = std::move(name); apply_scope(selected);
+    };
+    const std::function<void()> play_selection = [&] {
+        if (const auto selected = view.selected_index()) {
+            if (browse == Browse::library && queue_source == "Library") { player.play_track(*selected); }
+            else {
+                player.play_queue(view.scope() ? *view.scope() : player.library().search(""), *selected, browse != Browse::library);
+                queue_source = source_name();
+            }
+        }
+    };
+    const auto submit_collection = [&](CollectionEdit edit) {
+        if (!collections_store) { notice = collections.message; }
+        else if (!collections_store->submit(std::move(edit))) { notice = collections_store->status().message; }
+    };
     bool running = true;
     auto next_frame = std::chrono::steady_clock::now();
+    auto next_collection_poll = next_frame;
     while (running && !interrupted) {
+        if (collections_store && std::chrono::steady_clock::now() >= next_collection_poll) {
+            next_collection_poll = std::chrono::steady_clock::now() + std::chrono::milliseconds{100};
+            auto updated = collections_store->status();
+            if (updated.data != collections.data) {
+                std::string selected;
+                if (const auto index = view.selected_index()) { selected = player.library().tracks()[*index].stable_id; }
+                collections.data = updated.data;
+                panel.wrapped_width = 0;
+                next_frame = std::chrono::steady_clock::now();
+                if (pending_rename) {
+                    const bool renamed = std::any_of(collections.data->playlists.begin(), collections.data->playlists.end(),
+                        [&](const auto& list) { return list.name == pending_rename->second; }) &&
+                        (pending_rename->first == pending_rename->second || std::none_of(collections.data->playlists.begin(), collections.data->playlists.end(),
+                            [&](const auto& list) { return list.name == pending_rename->first; }));
+                    if (renamed && browse == Browse::playlist && playlist_name == pending_rename->first) { playlist_name = pending_rename->second; }
+                    if (renamed || updated.pending == 0) { pending_rename.reset(); }
+                }
+                if (browse != Browse::library) { apply_scope(selected); }
+                if (panel.kind == InfoPanel::Kind::playlists) {
+                    const auto& lists = collections.data->playlists;
+                    if (!panel.target_name.empty()) {
+                        const auto found = std::find_if(lists.begin(), lists.end(), [&](const auto& list) { return list.name == panel.target_name; });
+                        if (found != lists.end()) { panel.playlist_row = static_cast<std::size_t>(found - lists.begin()); }
+                    }
+                    panel.playlist_row = lists.empty() ? 0 : std::min(panel.playlist_row, lists.size() - 1);
+                    panel.follow_selection = true;
+                }
+            }
+            if (updated.message != collections.message || updated.pending != collections.pending || updated.ready != collections.ready) {
+                if (updated.ready && updated.message != "Collections ready") { notice = updated.message; }
+                panel.wrapped_width = 0; next_frame = std::chrono::steady_clock::now();
+            }
+            collections = std::move(updated);
+        }
         if (detail_probe) {
             if (const auto result = detail_probe->poll(); result && result->generation == detail_generation &&
                 panel.kind == InfoPanel::Kind::details) {
@@ -586,7 +700,7 @@ int run_tui_command(RefreshOptions options)
                     selected_id = player.library().tracks()[*index].stable_id;
                 }
                 player.replace_library(std::move(event->loaded->library));
-                view.refresh(selected_id);
+                apply_scope(selected_id);
                 if (!event->loaded->warnings.empty()) {
                     event->message += " Warnings: " + std::to_string(event->loaded->warnings.size()) +
                         "; " + event->loaded->warnings.front();
@@ -604,7 +718,8 @@ int run_tui_command(RefreshOptions options)
         if (now >= next_frame) {
             render(player, view, searching, settings_warning.empty() ? notice : settings_warning,
                    terminal.colors, refresh.busy(), discord ? discord->status() : "unavailable", discord_setup,
-                    lastfm ? lastfm->status() : LastfmStatus{LastfmPhase::error, "Last.fm unavailable", {}}, lastfm_setup, panel);
+                     lastfm ? lastfm->status() : LastfmStatus{LastfmPhase::error, "Last.fm unavailable", {}}, lastfm_setup, panel,
+                     collections, source_name(), queue_source);
             next_frame = now + std::chrono::milliseconds{100};
         }
         wint_t key{};
@@ -613,6 +728,7 @@ int run_tui_command(RefreshOptions options)
             if (result != ERR) {
                 if (result == KEY_CODE_YES && key == KEY_RESIZE) {
                     clearok(stdscr, true);
+                    panel.follow_selection = true;
                 } else if (lastfm_setup.active && lastfm) {
                     lastfm_setup_key(key, result == KEY_CODE_YES, lastfm_setup, *lastfm, lastfm_enabled);
                 } else if (discord_setup.active) {
@@ -625,6 +741,54 @@ int run_tui_command(RefreshOptions options)
                     }
                 } else if (searching) {
                     search_key(key, result == KEY_CODE_YES, view, searching, saved_query);
+                } else if (panel.kind == InfoPanel::Kind::playlists) {
+                    const bool special = result == KEY_CODE_YES;
+                    const bool enter = (!special && (key == '\n' || key == '\r')) || (special && key == KEY_ENTER);
+                    const auto& lists = collections.data->playlists;
+                    const auto* selected = panel.playlist_row < lists.size() ? &lists[panel.playlist_row] : nullptr;
+                    if (panel.name_edit != InfoPanel::NameEdit::none) {
+                        if (!special && key == 27) { panel.name_edit = InfoPanel::NameEdit::none; panel.input.clear(); }
+                        else if (enter) {
+                            const bool rename = panel.name_edit == InfoPanel::NameEdit::rename;
+                            if (rename && browse == Browse::playlist && playlist_name == panel.target_name) {
+                                pending_rename = std::pair{panel.target_name, panel.input};
+                            }
+                            submit_collection({rename ? CollectionAction::rename : CollectionAction::create,
+                                rename ? panel.target_name : panel.input, panel.input, {}});
+                            panel.target_name = panel.input;
+                            panel.name_edit = InfoPanel::NameEdit::none; panel.input.clear();
+                        } else if ((special && key == KEY_BACKSPACE) || (!special && (key == 127 || key == 8))) { erase_last_utf8(panel.input); }
+                        else if (!special && key == 21) { panel.input.clear(); }
+                        else if (!special && std::iswprint(key)) {
+                            const auto value = codepoint_utf8(static_cast<char32_t>(key));
+                            if (panel.input.size() + value.size() <= 128) { panel.input += value; }
+                        }
+                    } else if (panel.confirm_delete) {
+                        if (!special && key == 'y') { submit_collection({CollectionAction::erase, panel.target_name, {}, {}}); }
+                        panel.confirm_delete = false; panel.target_name.clear();
+                    } else if (!special && (key == 27 || key == 'q' || key == 'P')) { panel = {}; }
+                    else if (!special && key == 'b') { select_source(Browse::library); panel = {}; }
+                    else if (enter && selected) { const auto name = selected->name; select_source(Browse::playlist, name); panel = {}; }
+                    else if (!special && key == 'c') { panel.name_edit = InfoPanel::NameEdit::create; panel.input.clear(); }
+                    else if (!special && key == 'r' && selected) {
+                        panel.name_edit = InfoPanel::NameEdit::rename; panel.input = selected->name; panel.target_name = selected->name;
+                    } else if (!special && key == 'x' && selected) { panel.confirm_delete = true; panel.target_name = selected->name; }
+                    else if (!special && key == 'a' && selected && panel.track) {
+                        submit_collection({CollectionAction::add, selected->name, {}, {panel.track->stable_id, panel.track->audio_hash}});
+                    } else if ((special && (key == KEY_UP || key == KEY_PPAGE)) || (!special && key == 'k')) {
+                        const auto amount = special && key == KEY_PPAGE ? panel.page : 1;
+                        panel.playlist_row -= std::min(panel.playlist_row, amount); panel.target_name.clear(); panel.follow_selection = true;
+                    } else if ((special && (key == KEY_DOWN || key == KEY_NPAGE)) || (!special && key == 'j')) {
+                        if (!lists.empty()) { panel.playlist_row = std::min(lists.size() - 1, panel.playlist_row + (special && key == KEY_NPAGE ? panel.page : 1)); }
+                        panel.target_name.clear(); panel.follow_selection = true;
+                    } else if ((special && key == KEY_HOME) || (!special && key == 'g')) { panel.playlist_row = 0; panel.target_name.clear(); panel.follow_selection = true; }
+                    else if ((special && key == KEY_END) || (!special && key == 'G')) {
+                        panel.playlist_row = lists.empty() ? 0 : lists.size() - 1; panel.target_name.clear(); panel.follow_selection = true;
+                    } else if ((special && (key == KEY_LEFT || key == KEY_RIGHT)) ||
+                        (!special && (key == ' ' || key == 'n' || key == 'p' || key == 'h' || key == 'l' || key == '+' || key == '-' || key == '='))) {
+                        running = normal_key(key, special, player, view, searching, saved_query, play_selection);
+                    }
+                    panel.wrapped_width = 0;
                 } else if (result != KEY_CODE_YES && (key == '?' || key == 'i')) {
                     ++detail_generation;
                     if (detail_probe) { detail_probe->cancel(); }
@@ -672,13 +836,29 @@ int run_tui_command(RefreshOptions options)
                     else if ((special && (key == KEY_LEFT || key == KEY_RIGHT)) ||
                              (!special && (key == ' ' || key == '+' || key == '=' || key == '-' ||
                                            key == 'h' || key == 'l' || key == 'n' || key == 'p'))) {
-                        running = normal_key(key, special, player, view, searching, saved_query);
+                        running = normal_key(key, special, player, view, searching, saved_query, play_selection);
                     }
                 } else if (result != KEY_CODE_YES && key == 'L') {
                     if (lastfm) {
                         lastfm_enabled = true;
                         lastfm->configure(true);
                         lastfm_setup = {true, LastfmSetup::Field::menu, {}, {}, {}};
+                    }
+                } else if (result != KEY_CODE_YES && key == 'P') {
+                    panel = {}; panel.kind = InfoPanel::Kind::playlists;
+                    if (const auto selected = view.selected_index()) { panel.track = player.library().tracks()[*selected]; }
+                } else if (result != KEY_CODE_YES && key == 'F') {
+                    select_source(browse == Browse::favorites ? Browse::library : Browse::favorites);
+                } else if (result != KEY_CODE_YES && key == 'b') {
+                    select_source(Browse::library);
+                } else if (result != KEY_CODE_YES && (key == 'f' || key == 'u' || key == '<' || key == '>')) {
+                    if (const auto selected = view.selected_index()) {
+                        const auto& track = player.library().tracks()[*selected];
+                        if (key == 'f') { submit_collection({CollectionAction::favorite, {}, {}, {track.stable_id, track.audio_hash}}); }
+                        else if (browse == Browse::playlist) {
+                            submit_collection({key == 'u' ? CollectionAction::remove : key == '<' ? CollectionAction::earlier : CollectionAction::later,
+                                playlist_name, {}, {track.stable_id, track.audio_hash}});
+                        }
                     }
                 } else if (result != KEY_CODE_YES && key == 'd') {
                     if (!discord_enabled && !valid_discord_application_id(discord_application_id)) {
@@ -692,7 +872,7 @@ int run_tui_command(RefreshOptions options)
                         : "Indexing in background; lazer must be closed.") : "Refresh already running.";
                 } else {
                     running = normal_key(key, result == KEY_CODE_YES, player, view,
-                                         searching, saved_query);
+                                          searching, saved_query, play_selection);
                 }
                 next_frame = std::chrono::steady_clock::now();
             }

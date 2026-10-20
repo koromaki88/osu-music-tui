@@ -452,7 +452,7 @@ def exercise_settings(executable, library, root):
         session.send("q")
         session.finish()
     assert json.loads(path.read_text())["search"] == ""
-    assert list(path.parent.iterdir()) == [path], "staging files leaked"
+    assert [entry for entry in path.parent.iterdir() if entry.name != "collections"] == [path], "staging files leaked"
 
     # Invalid, oversized, and newer-schema files must not crash or be overwritten.
     for contents in ('{broken', '{"version":1,"volume":2}', '{"version":1,"volume":NaN}',
