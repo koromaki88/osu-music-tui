@@ -365,6 +365,18 @@ def exercise_lastfm_setup(executable, library, root):
     settings = json.loads((config / "osu-player/settings.json").read_text())
     assert settings["lastfm"] == {"enabled": False}
     assert not (config / "osu-player/lastfm/credentials.json").exists()
+    # Enabled but unconfigured must also launch into the library, not force setup.
+    settings["lastfm"]["enabled"] = True
+    (config / "osu-player/settings.json").write_text(json.dumps(settings))
+    with Session(executable, library, **environment) as session:
+        session.expect("Last.fm: needs credentials", "Library (Enter plays", "State: stopped")
+        assert "Last.fm setup" not in session.screen.text()
+        session.send("l")
+        session.expect("Last.fm setup", "needs API credentials")
+        session.send("d")
+        session.expect("Last.fm: off", "Library (Enter plays")
+        session.send("q")
+        session.finish()
     with Session(executable, library, **environment) as session:
         session.expect("Last.fm: off", "State: stopped")
         session.send("q")

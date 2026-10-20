@@ -45,6 +45,8 @@ disable/exit makes a best-effort clear. Abrupt termination cannot guarantee it.
 
 Esc closes/cancels the panel while playback continues. Existing authorization remains
 usable after upgrading; integration setup does not require a library refresh.
+On launch, saved enablement reconnects in the background without opening the menu.
+Press `l` to view status or complete setup if credentials/authorization are needed.
 
 | Key in Last.fm panel | Action |
 |---|---|

@@ -191,6 +191,12 @@ def exercise_lastfm_https(executable, root, openssl="openssl"):
         # Private authorization restores without another token exchange or autoplay.
         with Session(executable, library, **environment(server, good_cert, config)) as session:
             session.expect("State: stopped", "Last.fm: connected")
+            session.expect("Library (Enter plays")
+            assert "Last.fm setup" not in session.screen.text(), "restoring authorization must not open setup"
+            session.send("?")
+            session.expect("Help", "State: stopped")
+            session.send("\x1bl")
+            session.expect("Last.fm setup", "connected")
             session.send("\x1bq")
             session.finish()
         assert len(server.parameters("auth.getToken")) == 1

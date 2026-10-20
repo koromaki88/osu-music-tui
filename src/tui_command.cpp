@@ -549,7 +549,8 @@ int run_tui_command(RefreshOptions options)
         // Optional integration resource failures must not prevent audio/UI startup.
     }
     bool lastfm_enabled = saved_settings.lastfm_enabled;
-    LastfmSetup lastfm_setup{lastfm_enabled, LastfmSetup::Field::menu, {}, {}, {}};
+    // Restore the integration, not its menu. Setup opens only on explicit input.
+    LastfmSetup lastfm_setup;
     std::unique_ptr<LastfmPresence> lastfm;
     try {
         lastfm = std::make_unique<LastfmPresence>(lastfm_credentials_path());

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Restore enabled Last.fm in the background without automatically opening its menu
+  on launch; setup remains available with `l`.
 - Export optional beatmap BPM and set import date during indexing; load missing
   track-details duration with a cancellable background local-file probe.
 - Added scrollable in-app help (`?`) and selected-track details (`i`), with
