@@ -20,6 +20,8 @@ public sealed record TrackRecord(
     // Beatmap.Length is gameplay length, not necessarily the audio duration.
     // Probe the actual media later rather than publishing a misleading value.
     public long? duration_ms => null;
+    public double? bpm { get; init; }
+    public string? date_added { get; init; }
 }
 
 public sealed record IndexResult(string LazerVersion, IReadOnlyList<TrackRecord> Tracks,

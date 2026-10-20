@@ -236,12 +236,42 @@ def exercise_ui(executable, library):
         session.expect("State: playing", "Now: Artist — Alpha 日本")
         session.send(" ")
         session.expect("State: paused")
+        session.send("?")
+        session.expect("Help", "BROWSE AND SEARCH", "State: paused")
+        session.send("G")
+        session.expect("PANELS", "q: close panel")
+        session.resize(14, 50)
+        session.expect("Help", "Esc/q close")
+        session.send("g")
+        session.expect("BROWSE AND SEARCH")
+        session.resize(8, 30)
+        session.expect("Terminal too small")
+        session.resize(24, 100)
+        session.expect("Help", "State: paused")
+        session.send("q")  # Closes help, not the application.
+        session.expect("Library (Enter plays")
+        session.send("ji")  # Inspect selection, not the currently playing song.
+        session.expect("Track details", "Title: Bêta", "Duration: 00:08", "State: paused")
+        session.send("j\n")  # Panel input cannot select/play a different track.
+        session.expect("State: paused", "Now: Artist — Alpha 日本")
+        session.send("G")
+        session.expect("Metadata snapshot")
+        session.resize(30, 160)
+        session.send("g")
+        session.expect("Track details", "Title: Bêta")
+        session.send("\x1b")
+        session.expect(">   2", "State: paused")
+        session.resize(24, 100)
+        session.send("k")
         session.send("\x1bOC")  # application-cursor Right
         session.expect("00:05")
         session.send("+sR")
         session.expect("Volume: 75%", "Shuffle: on", "Repeat: one")
         session.send("/zz_missing")
         session.expect("No matching tracks", "Matches: 0")
+        session.send("?i")  # Literal search input, not panel shortcuts.
+        session.expect("Search: zz_missing?i_")
+        session.send("\x7f\x7f")
         session.send("q")  # Literal text in search mode, not quit.
         session.expect("zz_missingq")
         session.send("\x1b")
@@ -260,14 +290,49 @@ def exercise_ui(executable, library):
         session.expect("Matches: 3")
         session.send("sG\n")  # Disable shuffle so the broken entry is the queue tail.
         session.expect("State: failed", "Skipped track:")
+        session.send("iG")
+        session.expect("Track details", "Playback error:")
+        session.send("\x1b")
         session.send("g\n")
         session.expect("State: playing", "Now: Artist — Alpha 日本")
+        session.send("? ")
+        session.expect("Help", "State: paused")
+        session.send(" \x1b")
+        session.expect("State: playing")
         session.resize(8, 30)
         session.expect("Terminal too small")
         session.resize(30, 120)
         session.expect("osu! music player", "Now: Artist — Alpha 日本")
         session.send("q")
         session.finish()
+
+
+def exercise_details_metadata(executable, audio, root):
+    library = root / "details.ndjson"
+    fifo = root / "not-audio-fifo"
+    os.mkfifo(fifo)
+    records = [{"type": "track", "stable_id": str(index), "beatmap_set_id": str(index),
+                "title": title, "artist": "Metadata", "audio_filename": "audio.wav",
+                "audio_hash": hashlib.sha256(audio.read_bytes()).hexdigest(),
+                "audio_path": str(path), "bpm": 174.5, "date_added": "2026-01-02T03:04:05Z"}
+               for index, (title, path) in enumerate((("A audio", audio), ("B FIFO", fifo)))]
+    write_library(library, records)
+    before = hashlib.sha256(audio.read_bytes()).hexdigest()
+    with Session(executable, library) as session:
+        session.expect("Library: 2", "State: stopped")
+        session.send("i")
+        session.expect("Duration: 00:08", "BPM: 174.5", "Added: 2026-01-02", "State: stopped")
+        session.send("\x1bji")
+        session.expect("Title: B FIFO", "Unavailable (probe failed", "State: stopped")
+        session.resize(14, 50)
+        session.send("qki")
+        session.resize(24, 100)
+        session.expect("Title: A audio", "Duration: 00:08")
+        session.send("q?iq")  # Cancel/switch rapidly; no stale result can replace another panel.
+        session.expect("Library (Enter plays")
+        session.send("q")
+        session.finish()
+    assert hashlib.sha256(audio.read_bytes()).hexdigest() == before
 
 
 def exercise_lastfm_setup(executable, library, root):
@@ -413,6 +478,7 @@ def main():
         library = root / "library.ndjson"
         write_library(library, records)
         exercise_ui(options.player_binary, library)
+        exercise_details_metadata(options.player_binary, audio, root)
         exercise_settings(options.player_binary, library, root)
         exercise_lastfm_setup(options.player_binary, library, root)
 
@@ -420,6 +486,11 @@ def main():
         write_library(empty, [])
         with Session(options.player_binary, empty, TERM="vt100") as session:
             session.expect("Library is empty", "State: empty")
+            session.send("i")
+            session.expect("Track details", "No track selected.")
+            session.send("\x1b?")
+            session.expect("Help", "State: empty")
+            session.send("\x1b")
             session.send("\n npsRx")
             session.expect("State: empty")
             session.send("q")
@@ -448,7 +519,7 @@ def main():
                                text=True, capture_output=True, timeout=10)
         if piped.returncode != 1 or "interactive terminal" not in piped.stderr:
             raise RuntimeError("non-TTY input/output must be rejected cleanly")
-    print("TUI PTY tests passed: keys, UTF-8 search, resize, empty library, device error, terminal cleanup, settings persistence, Last.fm setup/masking/cancel (no network)")
+    print("TUI PTY tests passed: keys, UTF-8 search, responsive help/details panels, resize, empty library, device error, terminal cleanup, settings persistence, Last.fm setup/masking/cancel (no network)")
 
 
 if __name__ == "__main__":

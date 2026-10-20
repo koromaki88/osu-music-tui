@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cwchar>
+#include <limits>
 
 namespace osu_player {
 namespace {
@@ -100,6 +101,27 @@ std::string codepoint_utf8(char32_t value)
         result.push_back(static_cast<char>(0x80U | (value & 0x3FU)));
     }
     return result;
+}
+
+std::vector<std::string> wrap_terminal_text(const std::string_view utf8, const int columns)
+{
+    std::vector<std::string> lines;
+    if (columns <= 0) { return lines; }
+    const auto clean = fit_terminal_text(utf8, std::numeric_limits<int>::max());
+    std::string line;
+    int used{};
+    for (const auto character : clean) {
+        const int width = ::wcwidth(character);
+        if (width > columns - used) {
+            if (!line.empty()) { lines.push_back(std::move(line)); line.clear(); }
+            used = 0;
+        }
+        if (width == 0 && line.empty()) { continue; }
+        if (width > columns) { line += '?'; ++used; }
+        else { line += codepoint_utf8(static_cast<char32_t>(character)); used += width; }
+    }
+    if (!line.empty() || lines.empty()) { lines.push_back(std::move(line)); }
+    return lines;
 }
 
 void erase_last_utf8(std::string& text)

@@ -143,12 +143,19 @@ public static class RealmIndexer
 
                 var author = Optional<IRealmObjectBase?>(metadata, "Author");
                 long? onlineId = Optional<long?>(set, "OnlineID");
+                double? bpm = Optional<double?>(beatmap, "BPM");
+                DateTimeOffset? added = Optional<DateTimeOffset?>(set, "DateAdded");
                 tracks.Add(new TrackRecord($"{setId:D}:{hash}", setId.ToString("D"),
                     onlineId > 0 ? onlineId : null, title,
                     Optional<string>(metadata, "TitleUnicode") ?? "", artist,
                     Optional<string>(metadata, "ArtistUnicode") ?? "",
                     author is null ? "" : Optional<string>(author, "Username") ?? "",
-                    audioName, hash, path));
+                    audioName, hash, path)
+                {
+                    bpm = bpm.HasValue && double.IsFinite(bpm.Value) && bpm.Value > 0 ? bpm : null,
+                    date_added = added.HasValue && added.Value != DateTimeOffset.MinValue
+                        ? added.Value.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture) : null,
+                });
             }
         }
 

@@ -50,6 +50,7 @@ osu-player tui --osu-dir /path/to/osu-data
 | Left / Right | Seek five seconds |
 | `+` / `-` | Adjust volume |
 | `/` | Search |
+| `?` / `i` | Help / selected-track details |
 | `s` / `R` | Toggle shuffle / cycle repeat |
 | `r` | Refresh library (close lazer first) |
 | `d` / `l` | Discord / Last.fm setup |

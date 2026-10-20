@@ -3,6 +3,10 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <chrono>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -33,10 +37,35 @@ using FormatContext = std::unique_ptr<AVFormatContext, FormatContextDeleter>;
 
 AudioMetadata probe_audio(const std::filesystem::path& path)
 {
-    AVFormatContext* raw_context = nullptr;
-    const std::string path_text = path.string();
+    return probe_audio(path, {});
+}
 
-    const int open_result = avformat_open_input(&raw_context, path_text.c_str(), nullptr, nullptr);
+AudioMetadata probe_audio(const std::filesystem::path& path, const std::stop_token stop)
+{
+    // Anchor a regular local file; reject FIFOs/devices and protocol URLs before
+    // FFmpeg can block opening them or interpret them as a remote resource.
+    struct File { int fd; ~File() { if (fd >= 0) { close(fd); } } };
+    File file{open(path.c_str(), O_RDONLY | O_NONBLOCK | O_CLOEXEC)};
+    struct stat info{};
+    if (file.fd < 0 || fstat(file.fd, &info) != 0 || !S_ISREG(info.st_mode)) {
+        throw std::runtime_error{"audio probe requires a readable regular local file"};
+    }
+    struct Interrupt {
+        std::stop_token stop;
+        std::chrono::steady_clock::time_point deadline;
+    } interrupt{stop, std::chrono::steady_clock::now() + std::chrono::seconds{5}};
+    AVFormatContext* raw_context = avformat_alloc_context();
+    if (!raw_context) { throw std::bad_alloc{}; }
+    raw_context->interrupt_callback = {[](void* opaque) {
+        const auto& state = *static_cast<Interrupt*>(opaque);
+        return state.stop.stop_requested() || std::chrono::steady_clock::now() >= state.deadline ? 1 : 0;
+    }, &interrupt};
+    const std::string path_text = "/proc/self/fd/" + std::to_string(file.fd);
+    AVDictionary* options{};
+    av_dict_set(&options, "protocol_whitelist", "file", 0);
+
+    const int open_result = avformat_open_input(&raw_context, path_text.c_str(), nullptr, &options);
+    av_dict_free(&options);
     if (open_result < 0) {
         throw std::runtime_error{"could not open audio: " + ffmpeg_error(open_result)};
     }

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Export optional beatmap BPM and set import date during indexing; load missing
+  track-details duration with a cancellable background local-file probe.
+- Added scrollable in-app help (`?`) and selected-track details (`i`), with
+  Unicode-aware reflow on resize, persistent playback controls/status, metadata
+  snapshots, and recent track-error context. No extra indexing.
 - Reorganized documentation into a concise quick start and focused usage,
   integration, architecture, packaging, and release-validation guides.
 

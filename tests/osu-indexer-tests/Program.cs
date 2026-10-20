@@ -56,17 +56,10 @@ static void Check(bool condition, string description)
     }
 }
 
-static RealmSchema FixtureSchema() => new RealmSchema.Builder
+static RealmSchema FixtureSchema(bool extended = true) => new RealmSchema.Builder
 {
-    new ObjectSchema.Builder("BeatmapSet")
-    {
-        Property.Primitive("ID", RealmValueType.Guid, isPrimaryKey: true),
-        Property.Primitive("DeletePending", RealmValueType.Bool),
-        Property.Primitive("OnlineID", RealmValueType.Int),
-        Property.ObjectList("Files", "RealmNamedFileUsage"),
-        Property.ObjectList("Beatmaps", "Beatmap"),
-    },
-    new ObjectSchema.Builder("Beatmap") { Property.Object("Metadata", "BeatmapMetadata") },
+    SetSchema(extended),
+    BeatmapSchema(extended),
     new ObjectSchema.Builder("BeatmapMetadata")
     {
         Property.Primitive("Title", RealmValueType.String),
@@ -82,11 +75,35 @@ static RealmSchema FixtureSchema() => new RealmSchema.Builder
     new ObjectSchema.Builder("File") { Property.Primitive("Hash", RealmValueType.String) },
 }.Build();
 
+static ObjectSchema SetSchema(bool extended)
+{
+    var schema = new ObjectSchema.Builder("BeatmapSet")
+    {
+        Property.Primitive("ID", RealmValueType.Guid, isPrimaryKey: true),
+        Property.Primitive("DeletePending", RealmValueType.Bool),
+        Property.Primitive("OnlineID", RealmValueType.Int),
+        Property.ObjectList("Files", "RealmNamedFileUsage"),
+        Property.ObjectList("Beatmaps", "Beatmap"),
+    };
+    if (extended) { schema.Add(Property.Primitive("DateAdded", RealmValueType.Date)); }
+    return schema.Build();
+}
+
+static ObjectSchema BeatmapSchema(bool extended)
+{
+    var schema = new ObjectSchema.Builder("Beatmap") { Property.Object("Metadata", "BeatmapMetadata") };
+    if (extended) { schema.Add(Property.Primitive("BPM", RealmValueType.Double)); }
+    return schema.Build();
+}
+
 static void AddSet(Realm realm, string hash, string audioName, bool deleted = false, int difficulties = 1)
 {
     IRealmObjectBase set = realm.DynamicApi.CreateObject("BeatmapSet", Guid.NewGuid());
     set.DynamicApi.Set("DeletePending", deleted);
     set.DynamicApi.Set("OnlineID", 42);
+    if (set.ObjectSchema!.TryFindProperty("DateAdded", out _)) {
+        set.DynamicApi.Set("DateAdded", new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero));
+    }
     var file = realm.DynamicApi.CreateObject("File");
     file.DynamicApi.Set("Hash", hash);
     var usages = set.DynamicApi.GetList<IRealmObjectBase>("Files");
@@ -102,6 +119,7 @@ static void AddSet(Realm realm, string hash, string audioName, bool deleted = fa
         metadata.DynamicApi.Set("AudioFile", audioName);
         var beatmap = realm.DynamicApi.CreateObject("Beatmap");
         beatmap.DynamicApi.Set("Metadata", RealmValue.Object(metadata));
+        if (beatmap.ObjectSchema!.TryFindProperty("BPM", out _)) { beatmap.DynamicApi.Set("BPM", 174.5); }
         set.DynamicApi.GetList<IRealmObjectBase>("Beatmaps").Add(beatmap);
     }
 }
@@ -152,6 +170,9 @@ static void RunTests(string root)
         "normalize hashes and resolve audio paths");
     Check(result.Tracks[0].title_unicode == "例", "retain Unicode metadata");
     Check(result.Tracks[0].online_set_id == 42, "read online set ID");
+    Check(result.Tracks.All(track => track.bpm == 174.5 && track.date_added == "2026-01-02T03:04:05.0000000+00:00"),
+        "export beatmap BPM and set import date");
+    Check(result.Tracks.All(track => track.duration_ms is null), "never confuse gameplay length with audio duration");
     using var output = new StringWriter();
     result.Write(output);
     Check(!output.ToString().Contains("never-export-this"), "do not export authentication configuration");
@@ -178,6 +199,16 @@ static void RunTests(string root)
     using (var realm = Realm.GetInstance(new RealmConfiguration(Path.Combine(empty, "client.realm"))
         { IsDynamic = true, Schema = FixtureSchema() })) { }
     Check(RealmIndexer.Read(empty).Tracks.Count == 0, "support an empty library");
+
+    string legacy = Path.Combine(root, "legacy");
+    Directory.CreateDirectory(Path.Combine(legacy, "files", "a", "aa"));
+    File.WriteAllText(Path.Combine(legacy, "files", "a", "aa", hash), "fixture");
+    using (var realm = Realm.GetInstance(new RealmConfiguration(Path.Combine(legacy, "client.realm"))
+        { IsDynamic = true, Schema = FixtureSchema(false) })) {
+        realm.Write(() => AddSet(realm, hash, "sub/audio.mp3"));
+    }
+    var legacyTrack = RealmIndexer.Read(legacy).Tracks.Single();
+    Check(legacyTrack.bpm is null && legacyTrack.date_added is null, "missing optional metadata stays unknown");
 
     string bad = Path.Combine(root, "incompatible");
     Directory.CreateDirectory(bad);

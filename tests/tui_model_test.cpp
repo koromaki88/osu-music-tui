@@ -92,6 +92,13 @@ void test_filtering_and_empty_results()
 
 void test_terminal_text()
 {
+    using osu_player::wrap_terminal_text;
+    check(wrap_terminal_text("日本abc", 4) == std::vector<std::string>{"日本", "abc"}, "wrap CJK by cells");
+    check(wrap_terminal_text("a\xCC\x81" "bc", 1) == std::vector<std::string>{"a\xCC\x81", "b", "c"}, "wrap preserves combining marks");
+    check(wrap_terminal_text("日本", 1) == std::vector<std::string>{"?", "?"}, "one-cell wrap makes progress");
+    check(wrap_terminal_text("a\x1b\nb", 2) == std::vector<std::string>{"a ", " b"}, "wrap sanitizes controls");
+    check(wrap_terminal_text("text", 0).empty(), "zero width wrap is empty");
+    check(wrap_terminal_text(std::string(20000, 'x'), 100).size() == 82, "wrap bounds hostile metadata");
     using osu_player::fit_terminal_text;
     check(fit_terminal_text("abcdef", 3) == L"abc", "ASCII text clips by columns");
     check(fit_terminal_text("日本x", 3) == L"日", "a wide character is not split to fit one remaining column");

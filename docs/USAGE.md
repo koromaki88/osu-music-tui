@@ -51,6 +51,7 @@ handled signals restore terminal settings.
 | `r` | Refresh in background |
 | `d` | Toggle/setup Discord |
 | `l` | Open/setup Last.fm |
+| `?` / `i` | Open help / selected-track details |
 | `/` | Edit search |
 | Esc | Clear filter outside search mode |
 | `q` | Quit outside search mode |
@@ -61,6 +62,38 @@ Search filters as you type. Enter applies the filter; press Enter again to play.
 Esc cancels the edit, Backspace removes one UTF-8 codepoint, and Ctrl-U clears the query.
 Matching is ASCII-case-insensitive and supports exact Unicode text. Filtering does
 not change the playback queue or interrupt audio.
+
+### Help and track details
+
+Press `?` for controls and integration guidance, or `i` for the **selected library
+track**, which may differ from the playing track. Details show title/artist, original
+metadata, mapper, known duration, BPM, date added, official beatmap link, local audio
+path, and the most recently recorded playback error if it belongs to that track.
+Unknown values are labeled. If duration is not already known, a background worker
+probes only that audio file; loading/failure status appears without starting playback.
+The panel does not index the library or open links.
+
+BPM comes from the representative indexed beatmap, not audio beat detection; added
+is the beatmap set's import date in UTC. Close lazer and press `r` after updating the
+source-build indexer to populate these fields. Older exports must be regenerated;
+missing source fields remain unknown. Refresh does not scan all audio for durations.
+
+Panels replace the library area, leaving playback/status visible below. They use
+the available width on small terminals and a centered width of up to 96 cells on
+large ones. Unicode text wraps by terminal cells and reflows on resize; scroll
+position is clamped to the available content. Below 50×14, resize to restore the panel.
+
+- **Scroll:** `j`/`k`, Up/Down, PageUp/PageDown, `g`/`G`, or Home/End.
+- **Playback:** Space, Left/Right, and `+`/`-` remain active. Other library actions,
+  including Enter-to-play, are blocked while a panel is open.
+- **Close:** Esc, `q`, or the panel's opening key. `?`/`i` can switch between panels.
+  Outside panels/search, `q` quits as usual.
+
+Details are an owned snapshot at opening, so refresh/removal cannot invalidate them.
+Duration fills in when the probe finishes; reopen to update other metadata/errors.
+Panel state is not saved. Search and
+credential input take precedence: `?`/`i` typed there do not open panels. Text is
+sanitized and bounded, including local paths; unusually long fields may be truncated.
 
 ### Queue behavior
 

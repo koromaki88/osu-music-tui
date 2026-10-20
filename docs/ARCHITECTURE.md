@@ -34,6 +34,11 @@ gameplay length is not used.
 The player validates the complete export, deduplicates by beatmap set/audio hash,
 and sorts by display artist/title.
 
+Optional `Beatmap.BPM` and `BeatmapSet.DateAdded` export as positive finite BPM and
+UTC import timestamp. Missing fields stay null. Deduplication retains the same
+representative beatmap used for each track's other metadata; BPM is not audio-derived
+and may differ across difficulties.
+
 ### Process and cache lifecycle
 
 The adapter is spawned directly without a shell, with private disk-backed output,
@@ -61,6 +66,23 @@ Settings use bounded versioned JSON and private atomic writes, preserving invali
 files. Only applied search edits are saved; playback state is never restored.
 Terminal metadata is control/escape-sanitized and clipped by cell width. Full emoji
 grapheme-cluster modeling is not implemented.
+
+Help/details in `tui_command.cpp` reuse the library viewport rather than creating
+separate blocking ncurses loops. An owned details snapshot avoids dangling library
+references across refresh. Panel input scrolls independently; only explicitly allowed
+transport controls pass through. `wrap_terminal_text` sanitizes and wraps by cell
+width with an 8,192-codepoint budget per field. Wrapped lines are cached until width
+changes; height changes only clamp scrolling. Playback pumping and integration workers
+continue normally. PTY tests cover minimum/wide/tiny layouts, selection preservation,
+empty details, panel switching, playback controls, and error context.
+
+`track_details_probe.hpp` owns one latest-request worker for missing duration. Closing
+or replacing a panel cancels the request; generation checks reject stale results.
+The worker opens regular local files read-only and rejects FIFOs/devices. FFmpeg uses
+an anchored descriptor path, file-only protocol whitelist, cooperative cancellation,
+and a five-second interrupt deadline. This is not a hard deadline for uninterruptible
+kernel/filesystem I/O. Unknown/error results remain explicit; refresh does not probe
+the whole library and probe results are not persisted in the library cache.
 
 ## Playback events and listening time
 

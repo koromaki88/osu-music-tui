@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <string>
+#include <stop_token>
 
 namespace osu_player {
 
@@ -15,5 +16,6 @@ struct AudioMetadata {
 };
 
 [[nodiscard]] AudioMetadata probe_audio(const std::filesystem::path& path);
+[[nodiscard]] AudioMetadata probe_audio(const std::filesystem::path& path, std::stop_token stop);
 
 }  // namespace osu_player
