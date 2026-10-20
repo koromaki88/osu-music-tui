@@ -1,6 +1,8 @@
 #include "osu_player/library_loader.hpp"
 
 #include <iostream>
+#include <algorithm>
+#include <random>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -89,6 +91,57 @@ void test_search()
     expect(loaded.library.search("").size() == 2, "an empty search returns all tracks");
 }
 
+void test_construction_matches_reference()
+{
+    // Keep an independent version of the original folded-string comparison as
+    // an oracle, including UTF-8 byte order, prefixes, case ties and stable IDs.
+    const auto fold = [](std::string text) {
+        for (auto& c : text) { if (c >= 'A' && c <= 'Z') { c = static_cast<char>(c + ('a' - 'A')); } }
+        return text;
+    };
+    const std::vector<std::string> names{"", "A", "a", "AA", "Ab", "aB", "B", "日本", "é", "あ",
+        std::string(200, 'A'), std::string(200, 'a') + "b", std::string{"a\0B", 3}};
+    std::vector<osu_player::Track> input;
+    for (std::size_t i = 0; i < 10001; ++i) {
+        osu_player::Track track;
+        track.stable_id = std::to_string(i);
+        track.beatmap_set_id = track.stable_id;
+        track.audio_hash = std::string{hash_a};
+        track.artist = names[i % names.size()];
+        track.title = names[(i / names.size()) % names.size()];
+        if (i % 3 == 0) { track.artist_unicode = names[(i + 7) % names.size()]; }
+        if (i % 5 == 0) { track.title_unicode = names[(i + 3) % names.size()]; }
+        input.push_back(std::move(track));
+    }
+    std::mt19937 random{42};
+    std::shuffle(input.begin(), input.end(), random);
+    auto reference = input;
+    std::ranges::sort(reference, [&](const auto& a, const auto& b) {
+        const auto artist_a = fold(a.display_artist()), artist_b = fold(b.display_artist());
+        if (artist_a != artist_b) { return artist_a < artist_b; }
+        const auto title_a = fold(a.display_title()), title_b = fold(b.display_title());
+        return title_a == title_b ? a.stable_id < b.stable_id : title_a < title_b;
+    });
+    // Repeated difficulties must retain the first metadata, not whichever one sorts first.
+    for (std::size_t i = 0; i < 1000; ++i) {
+        auto duplicate = input[i];
+        duplicate.stable_id = "duplicate";
+        duplicate.title = "incorrect replacement";
+        input.push_back(std::move(duplicate));
+    }
+    const osu_player::Library library{std::move(input)};
+    expect(library.tracks().size() == reference.size(), "deduplication keeps unique count");
+    for (std::size_t i = 0; i < reference.size() && i < library.tracks().size(); ++i) {
+        expect(library.tracks()[i].stable_id == reference[i].stable_id, "allocation-free sort matches original ordering");
+    }
+    const osu_player::Library empty{std::vector<osu_player::Track>{}};
+    expect(empty.tracks().empty(), "empty vector construction remains safe");
+    std::vector<osu_player::Track> duplicates(10000, reference.front());
+    const osu_player::Library single{std::move(duplicates)};
+    expect(single.tracks().size() == 1 && single.tracks()[0].stable_id == reference.front().stable_id,
+           "all-duplicate input compacts safely without self-moves");
+}
+
 void test_invalid_input()
 {
     expect_format_error(
@@ -128,6 +181,7 @@ int main()
 {
     test_loading_sorting_and_deduplication();
     test_search();
+    test_construction_matches_reference();
     test_invalid_input();
 
     if (failures != 0) {

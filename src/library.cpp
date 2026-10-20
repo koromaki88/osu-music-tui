@@ -32,6 +32,24 @@ namespace {
     return result;
 }
 
+// Compare folded bytes directly: sorting must not allocate two artist/title
+// strings for each of its O(n log n) comparisons. Unsigned bytes preserve the
+// existing std::string ordering for non-ASCII UTF-8 as well as ASCII prefixes.
+[[nodiscard]] int compare_folded(const std::string_view left, const std::string_view right)
+{
+    const auto fold = [](const char character) {
+        const auto byte = static_cast<unsigned char>(character);
+        return byte >= 'A' && byte <= 'Z' ? static_cast<unsigned char>(byte + ('a' - 'A')) : byte;
+    };
+    const auto common = std::min(left.size(), right.size());
+    for (std::size_t index = 0; index < common; ++index) {
+        const auto a = fold(left[index]);
+        const auto b = fold(right[index]);
+        if (a != b) { return a < b ? -1 : 1; }
+    }
+    return left.size() == right.size() ? 0 : left.size() < right.size() ? -1 : 1;
+}
+
 [[nodiscard]] std::string searchable_text(const Track& track)
 {
     std::string result;
@@ -59,16 +77,12 @@ Library::Library(std::vector<Track> tracks)
     }
 
     std::ranges::sort(tracks_, [](const Track& left, const Track& right) {
-        const std::string left_artist = ascii_fold(left.display_artist());
-        const std::string right_artist = ascii_fold(right.display_artist());
-        if (left_artist != right_artist) {
-            return left_artist < right_artist;
+        if (const auto artist = compare_folded(left.display_artist(), right.display_artist()); artist != 0) {
+            return artist < 0;
         }
 
-        const std::string left_title = ascii_fold(left.display_title());
-        const std::string right_title = ascii_fold(right.display_title());
-        if (left_title != right_title) {
-            return left_title < right_title;
+        if (const auto title = compare_folded(left.display_title(), right.display_title()); title != 0) {
+            return title < 0;
         }
 
         return left.stable_id < right.stable_id;

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reduced library construction allocations with allocation-free case-insensitive
+  sorting while preserving existing ordering and first-match deduplication.
 - Restore enabled Last.fm in the background without automatically opening its menu
   on launch; setup remains available with `l`.
 - Export optional beatmap BPM and set import date during indexing; load missing

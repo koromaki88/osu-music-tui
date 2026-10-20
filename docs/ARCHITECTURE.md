@@ -34,6 +34,11 @@ gameplay length is not used.
 The player validates the complete export, deduplicates by beatmap set/audio hash,
 and sorts by display artist/title.
 
+Library construction retains the first record for each set/audio pair. Its sort
+comparator folds ASCII bytes
+directly without allocating strings per comparison; unsigned-byte Unicode ordering
+and stable-ID tie breaking match the original folded-string ordering.
+
 Optional `Beatmap.BPM` and `BeatmapSet.DateAdded` export as positive finite BPM and
 UTC import timestamp. Missing fields stay null. Deduplication retains the same
 representative beatmap used for each track's other metadata; BPM is not audio-derived
