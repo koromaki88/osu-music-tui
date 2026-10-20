@@ -468,14 +468,14 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
          panel.name_edit != InfoPanel::NameEdit::none ? "Enter save | Esc cancel | Ctrl-U clear | Playback continues" :
          panel.confirm_delete ? "y confirms deletion | any other key cancels | Playback continues" :
          panel.kind != InfoPanel::Kind::none ? "Space pause  n/p tracks  h/l seek  +/- volume | Esc/q closes panel" :
-         "? help  i details  Enter play  Space pause  q quit", columns);
+          "Enter play  Space pause  n/p tracks  ? help  q quit", columns);
     draw(rows - 1, 0, lastfm_setup.active ? (!lastfm_status.authorization_url.empty() ?
          "Open the link in your browser, approve access, then press Enter." :
           "Credentials are private files, not encrypted. Playback continues while editing.") :
           discord_setup.active ? "Copy its Application ID. Playback continues while you edit." :
           panel.kind == InfoPanel::Kind::playlists ? "c new  a add  r rename  x delete  Enter browse  b all" :
           panel.kind != InfoPanel::Kind::none ? "? help  i details | Enter does not play while a panel is open" :
-          "f favorite  F favorites  P playlists  b all | h/l seek  n/p tracks  s shuffle  R repeat  L Last.fm", columns);
+           "h/l seek  +/- volume  / search  s shuffle  R repeat", columns);
     wnoutrefresh(stdscr);
     doupdate();
 }

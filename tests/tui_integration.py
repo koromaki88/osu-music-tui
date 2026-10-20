@@ -225,6 +225,8 @@ def write_library(path, records):
 def exercise_ui(executable, library):
     with Session(executable, library) as session:
         session.expect("osu! music player", "Matches: 3", "State: stopped", "Alpha 日本")
+        session.expect("Enter play  Space pause", "h/l seek  +/- volume")
+        assert "Last.fm" not in "\n".join(session.screen.text().splitlines()[-2:]), "main footer should show basic controls only"
         session.send("j")
         session.expect(">   2")
         session.send("k")

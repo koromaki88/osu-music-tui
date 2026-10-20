@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Simplified the main keybind footer to basic playback/search controls; advanced
+  shortcuts, including Last.fm setup, remain in `?` help.
 - Added local favorites (`f`/`F`) and named playlists (`P`): persistent background
   saves, add/remove/reorder, rename/delete confirmation, and missing-track retention.
 - List playback uses dedicated queue snapshots: next/previous, shuffle and repeat
