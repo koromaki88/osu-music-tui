@@ -7,8 +7,11 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import sys
 from unittest.mock import patch
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+import check_ca_bundle as trust
 
 spec = importlib.util.spec_from_file_location(
     "package_appimage", Path(__file__).resolve().parent.parent / "tools/package_appimage.py")
@@ -21,6 +24,25 @@ builder_spec.loader.exec_module(builder)
 
 
 class PackagingTests(unittest.TestCase):
+    def test_ca_bundle_gate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / "bundle.pem"
+            key = Path(directory) / "key.pem"
+            subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                            "-keyout", str(key), "-out", str(bundle), "-days", "1",
+                            "-subj", "/CN=Synthetic packaging root"], check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            import ssl
+            digest = hashlib.sha256(ssl.PEM_cert_to_DER_cert(bundle.read_text())).hexdigest()
+            self.assertEqual(trust.check_ca_bundle(bundle), {"policy": trust.POLICY, "certificates": 1})
+            with patch.dict(trust.BLOCKED_ANCHORS, {digest: "Synthetic blocked root"}):
+                with self.assertRaisesRegex(RuntimeError, "Synthetic blocked root"):
+                    trust.check_ca_bundle(bundle)
+            for content in ("", "not a PEM certificate", "-----BEGIN CERTIFICATE-----\nbm90LWEtY2VydA==\n-----END CERTIFICATE-----\n"):
+                bundle.write_text(content)
+                with self.assertRaises(RuntimeError):
+                    trust.check_ca_bundle(bundle)
+
     def parse(self, output, returncode=0):
         completed = subprocess.CompletedProcess([], returncode, stdout=output, stderr="")
         with patch.object(packaging.subprocess, "run", return_value=completed):

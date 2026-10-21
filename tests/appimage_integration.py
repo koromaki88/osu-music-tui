@@ -10,11 +10,16 @@ import shutil
 import subprocess
 import tempfile
 import wave
+import sys
 from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+from check_ca_bundle import check_ca_bundle
 
 from tui_integration import Session, exercise_settings, exercise_ui, exercise_lastfm_setup, write_library
 from discord_integration import tui_tests as exercise_discord
 from lastfm_integration import exercise_lastfm_https
+from collections_integration import exercise as exercise_collections
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,9 +78,10 @@ def main():
             appdir = moved / "squashfs-root"
             launcher = str(appdir / "AppRun")
             manifest = json.loads((appdir / "usr/share/osu-player/build-manifest.json").read_text())
-            assert manifest["version"] == "0.4.1"
+            assert manifest["version"] == "0.5.0"
             certificates = appdir / "usr/share/osu-player/ca-certificates.crt"
             assert hashlib.sha256(certificates.read_bytes()).hexdigest() == manifest["ca_bundle_sha256"]
+            assert check_ca_bundle(certificates) == manifest["ca_bundle_check"]
             runtime = json.loads((appdir / "usr/lib/osu-player/indexer/osu-indexer.runtimeconfig.json").read_text())
             assert "framework" not in runtime["runtimeOptions"], "indexer must be self-contained"
             assert runtime["runtimeOptions"]["tfm"] == "net10.0"
@@ -102,6 +108,9 @@ def main():
             exercise_ui(launcher, exported)
             exercise_settings(launcher, exported, root)
             exercise_lastfm_setup(launcher, exported, root)
+            collections_root = root / "collections"
+            collections_root.mkdir()
+            exercise_collections(launcher, collections_root)
             exercise_lastfm_https(launcher, root / "lastfm-https", openssl)
             discord_root = root / "discord"
             discord_root.mkdir()

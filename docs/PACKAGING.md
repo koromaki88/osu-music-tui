@@ -56,6 +56,14 @@ satisfy redistribution obligations.
 AppRun prefers host CA roots, respecting explicit `SSL_CERT_FILE`, with a hashed
 bundled fallback. TLS verification stays enabled.
 
+The fallback must pass `tools/check_ca_bundle.py`, an offline gate rejecting known
+TLS trust anchors implicated in the October 2026 eMudhra compromise. The manifest
+records its policy and certificate count alongside the bundle hash; extraction
+tests repeat this check. This is not a general revocation checker. Keep host CA
+packages updated, including any explicit `SSL_CERT_FILE` override. The Dockerfile's
+`CA_SECURITY_REFRESH` argument invalidates the cached certificate-install layer for
+deliberate security refreshes; future incidents still need policy review and updates.
+
 ### Other build targets
 
 | Target | Purpose / limitation |

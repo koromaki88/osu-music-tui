@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(osu_music_player VERSION 0.4.1 LANGUAGES CXX)
+project(osu_music_player VERSION 0.5.0 LANGUAGES CXX)
 
 option(OSU_PLAYER_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 

@@ -11,6 +11,7 @@ import wave
 from tui_integration import Session, exercise_settings, exercise_ui, exercise_lastfm_setup, write_library
 from discord_integration import tui_tests as exercise_discord
 from lastfm_integration import exercise_lastfm_https
+from collections_integration import exercise as exercise_collections
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,7 +25,7 @@ def fingerprint(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path,
-                        default=ROOT / "artifacts/arch/osu-music-player-0.4.1-1-x86_64.pkg.tar.zst")
+                        default=ROOT / "artifacts/arch/osu-music-player-0.5.0-1-x86_64.pkg.tar.zst")
     parser.add_argument("--dotnet", default="dotnet")
     options = parser.parse_args()
     package = options.package.resolve()
@@ -37,7 +38,7 @@ def main():
         unpacked.mkdir()
         subprocess.run(["bsdtar", "-xf", str(package), "-C", str(unpacked)], check=True)
         metadata = (unpacked / ".PKGINFO").read_text()
-        assert "pkgver = 0.4.1-1" in metadata
+        assert "pkgver = 0.5.0-1" in metadata
         for dependency in ("curl", "openssl", "ca-certificates"):
             assert f"depend = {dependency}\n" in metadata
         assert "depend = dotnet-runtime-10.0" in metadata
@@ -78,11 +79,14 @@ def main():
         exercise_ui(player, exported)
         exercise_settings(player, exported, root)
         exercise_lastfm_setup(player, exported, root)
+        collections_root = root / "collections"
+        collections_root.mkdir()
+        exercise_collections(player, collections_root)
         exercise_lastfm_https(player, root / "lastfm-https")
         discord_root = root / "discord"
         discord_root.mkdir()
         exercise_discord(player, discord_root)
-    print("Arch package tests passed: version/ABI metadata, packaged indexer, default directory, dummy playback/PTY, settings persistence, Discord setup/fake IPC")
+    print("Arch package tests passed: version/ABI metadata, packaged indexer, default directory, dummy playback/PTY, settings persistence, favorites/playlists, Discord setup/fake IPC")
 
 
 if __name__ == "__main__":

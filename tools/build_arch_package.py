@@ -12,7 +12,7 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
-NAME = "osu-music-player-0.4.1"
+NAME = "osu-music-player-0.5.0"
 
 
 def source_files(root):
@@ -24,7 +24,8 @@ def source_files(root):
                 "tools/osu-indexer/packages*.lock.json", "tools/*appimage.py",
                 "packaging/osu-player.desktop", "packaging/osu-player.svg",
                  "packaging/arch/LICENSE-NOTICE", "packaging/arch/PKGBUILD", "packaging/THIRD_PARTY.md",
-                "tools/build_arch_package.py", "tools/install_dotnet.py",
+                 "tools/build_arch_package.py", "tools/install_dotnet.py",
+                 "tools/check_ca_bundle.py",
                 "tools/run_appimage_build.py", "packaging/Dockerfile")
     return sorted({path for pattern in patterns for path in root.glob(pattern)
                    if path.is_file() and not path.is_symlink()})

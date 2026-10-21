@@ -10,6 +10,52 @@ All package validation used synthetic libraries/audio and fake services only.
 It did not launch the game, scan a real library, install or publish packages,
 or create commits/tags.
 
+## 0.5.0 — collections, optimization, and certificate-trust refresh
+
+Both formats were rebuilt and validated. The AppImage passed `make test-appimage`;
+Arch 0.5.0-1 passed `make test-arch-package` using the private SDK and `--nodeps`.
+Native `make -j4 test` and synthetic `make test-indexer` passed before each package
+build and again within the respective builds. Arch installation/pacman dependency
+resolution remains untested because pacman-managed .NET packages are absent.
+
+| Artifact | Size | Result |
+|---|---|---|
+| `artifacts/dist/osu-player-x86_64.AppImage` | 101.3 MiB | Passed package validation and independent checksum verification |
+| `artifacts/arch/osu-music-player-0.5.0-1-x86_64.pkg.tar.zst` | 4.5 MiB | Passed extracted-package validation and independent checksum verification; private SDK / `--nodeps` |
+
+Coverage includes favorites/playlists persistence and scoped queues, responsive
+panels, synthetic Realm indexing, relocation/no installed .NET, dummy WAV/MP3/Ogg
+playback, settings, Discord fake IPC, and isolated Last.fm HTTPS. Minimal-container
+standalone indexing and CA fallback selection passed. The x86-64/glibc floor remains
+2.36, with bundled .NET runtime 10.0.13.
+
+The embedded 148-certificate fallback passed the incident-specific offline trust
+gate. All 12 public eMudhra incident test chains were independently rejected for
+untrusted issuers using host OpenSSL with only the extracted fallback as trust.
+This is separate from packaged-libcurl HTTPS validation using synthetic certificates;
+it is not evidence of universal revocation checking or protection from future CA
+incidents. The archived 0.4.1 fallback failed the new gate as expected.
+
+- **SHA-256:** `a8e3f06b165b02fe03538d736a3adbea7de118fa7cb0e3e8a0bb0c72aa66aa3e`
+- **Arch SHA-256:** `c7f5f93629847f72f00d20793b75b1f372d01c07a3db4648782107049a4570eb`
+- **Evidence:** `artifacts/releases/0.5.0/verified-artifacts.json`, `logs/`, and
+  the retained public `incident-chains.zip` with its hash recorded in the evidence.
+- **Arch evidence:** `artifacts/releases/0.5.0/arch-logs/` retains native/indexer,
+  build/extracted-package tests, independent checksum and `.PKGINFO` records. The
+  initial 200-second command timeout is retained in separate `*-timeout.log` files;
+  the longer retry passed. Extracted tests include favorites/playlists and scoped
+  queues in addition to indexer discovery, dummy playback, panels, settings,
+  fake Discord and isolated Last.fm HTTPS. Arch uses system CA roots, not the
+  AppImage fallback. FFmpeg dependencies match SONAMEs 63/63/61/7 on the build host.
+- **Release notes:** `artifacts/releases/0.5.0/release-notes.md`.
+- **Previous AppImage:** image/checksum/manifest preserved under
+  `artifacts/releases/0.4.1/appimage/`; previous logs and Arch artifacts retained.
+
+FUSE mounting and CMake/Ninja remain unverified. No game launch, real-library scan,
+package installation, or publication occurred. This record was added after the build
+and is not embedded in the candidate. Public distribution remains blocked on licensing
+and dependency/source-compliance review.
+
 ## 0.4.1 — UI, controls, and loading efficiency
 
 Both formats were rebuilt and validated with synthetic fixtures. Native `make test`

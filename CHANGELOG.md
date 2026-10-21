@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.0
+
+- Refreshed AppImage build-time certificate trust and added an offline release gate
+  rejecting known TLS trust anchors implicated in the October 2026 eMudhra incident.
+  Host trust remains preferred; this check also covers the embedded fallback.
 - Reduced favorites rendering allocations and collection-resolution scratch memory;
   scoped searches now inspect only the browsed list instead of the entire library.
 - Separated collection models/validation, private file handling, and worker dispatch;

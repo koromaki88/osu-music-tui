@@ -3,6 +3,8 @@
 # remain enabled. See the generated manifest for the exact native package set.
 FROM debian:bookworm-slim@sha256:a4672c0cb26fbdde88e38fa2dfb6c681942306680e41e4378b28770b6e79ee91 AS toolchain
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 LANG=C.UTF-8 DOTNET_ROOT=/opt/dotnet PATH=/opt/dotnet:$PATH
+# Bump deliberately for trust-store incidents; invalidate cached apt installation.
+ARG CA_SECURITY_REFRESH=2026-10-21
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libicu72 libssl3 libgssapi-krb5-2 \
     g++ make pkg-config python3 ffmpeg libavformat-dev libavcodec-dev libavutil-dev \

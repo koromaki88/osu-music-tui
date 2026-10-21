@@ -12,6 +12,8 @@ import subprocess
 import tempfile
 import urllib.request
 
+from check_ca_bundle import check_ca_bundle
+
 
 ROOT = Path(__file__).resolve().parent.parent
 TOOL_URL = "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
@@ -242,8 +244,10 @@ def build(options):
         certificates = appdir / "usr/share/osu-player/ca-certificates.crt"
         certificates.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2("/etc/ssl/certs/ca-certificates.crt", certificates)
-        manifest = {"version": "0.4.1", "architecture": "x86_64", "glibc_minimum": glibc_requirement(appdir),
+        trust_check = check_ca_bundle(certificates)
+        manifest = {"version": "0.5.0", "architecture": "x86_64", "glibc_minimum": glibc_requirement(appdir),
                     "ca_bundle_sha256": sha256(certificates),
+                    "ca_bundle_check": trust_check,
                     "dotnet_runtime": RUNTIME_VERSION, "appimagetool_sha256": TOOL_SHA256,
                     "libraries": libraries,
                     "host_requirements": ["Linux x86-64", "compatible glibc and /bin/sh",
@@ -268,7 +272,7 @@ def build(options):
         packed = work / "osu-player-x86_64.AppImage"
         run([work / "squashfs-root/AppRun", "--no-appstream", "--runtime-file", runtime,
              "--mksquashfs-opt", "-processors", "--mksquashfs-opt", "2", appdir, packed],
-              env=dict(os.environ, ARCH="x86_64", VERSION="0.4.1"))
+              env=dict(os.environ, ARCH="x86_64", VERSION="0.5.0"))
         packed.chmod(0o755)
         os.replace(packed, output)
         output.with_suffix(output.suffix + ".sha256").write_text(f"{sha256(output)}  {output.name}\n")
