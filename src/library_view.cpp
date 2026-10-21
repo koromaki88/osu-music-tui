@@ -75,12 +75,7 @@ void LibraryView::set_scope(std::optional<std::vector<std::size_t>> indices, con
 const std::optional<std::vector<std::size_t>>& LibraryView::scope() const noexcept { return scope_; }
 void LibraryView::rebuild()
 {
-    matches_ = library_.search(query_);
-    if (!scope_) { return; }
-    std::vector<bool> matches(library_.tracks().size(), false);
-    for (const auto index : matches_) { matches[index] = true; }
-    matches_.clear();
-    for (const auto index : *scope_) { if (index < matches.size() && matches[index]) { matches_.push_back(index); } }
+    matches_ = scope_ ? library_.search(query_, *scope_) : library_.search(query_);
 }
 void LibraryView::refresh(const std::string_view selected_stable_id)
 {

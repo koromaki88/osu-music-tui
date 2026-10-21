@@ -108,4 +108,17 @@ std::vector<std::size_t> Library::search(const std::string_view query) const
     return matches;
 }
 
+std::vector<std::size_t> Library::search(const std::string_view query, const std::span<const std::size_t> scope) const
+{
+    const std::string needle = ascii_fold(query);
+    std::vector<std::size_t> matches;
+    matches.reserve(scope.size());
+    for (const auto index : scope) {
+        if (index < tracks_.size() && (needle.empty() || searchable_text(tracks_[index]).find(needle) != std::string::npos)) {
+            matches.push_back(index);
+        }
+    }
+    return matches;
+}
+
 }  // namespace osu_player

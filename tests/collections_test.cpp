@@ -134,9 +134,67 @@ void limits()
     send(store,{CollectionAction::favorite,{}, {},{"bad", "invalid-hash"}});
     check(store.status().data->favorites.empty(),"invalid references not persisted");
 }
+void snapshot_and_noop()
+{
+    Temporary temp;
+    CollectionsStore store{temp.path()}; ready(store);
+    send(store, {CollectionAction::favorite, {}, {}, ref("日本")});
+    send(store, {CollectionAction::favorite, {}, {}, ref("a")});
+    send(store, {CollectionAction::create, "Ordered", {}, {}});
+    send(store, {CollectionAction::add, "Ordered", {}, ref("日本")});
+    send(store, {CollectionAction::add, "Ordered", {}, ref("a")});
+    const auto snapshot = store.status().data;
+    Collections copy = *snapshot;
+    Track track; track.stable_id = "日本"; track.audio_hash = ref("").hash;
+    check(copy.favorite(track), "copied favorite index owns positions, not borrowed strings");
+    Track other = track; other.stable_id = "a"; other.title = "A"; other.beatmap_set_id = "a";
+    track.title = "Z"; track.beatmap_set_id = "z";
+    Library library{{track, other}};
+    check(snapshot->resolve(library, false, "Ordered") == std::vector<std::size_t>({1,0}), "resolver preserves saved order rather than library order");
+    check(snapshot->resolve(library, false, "absent").empty(), "unknown playlist is empty");
+    track.audio_hash = std::string(64, 'b');
+    check(snapshot->resolve(Library{{track,other}}, true, "") == std::vector<std::size_t>({0}), "resolver requires both ID and audio hash");
+    struct stat before{}, after{};
+    check(stat(temp.path().c_str(), &before) == 0, "stat before no-op");
+    send(store, {CollectionAction::add, "Ordered", {}, ref("a")});
+    send(store, {CollectionAction::earlier, "Ordered", {}, ref("日本")});
+    check(stat(temp.path().c_str(), &after) == 0 && before.st_ino == after.st_ino &&
+        before.st_mtim.tv_sec == after.st_mtim.tv_sec && before.st_mtim.tv_nsec == after.st_mtim.tv_nsec,
+        "idempotent edits do not replace or touch file");
+    check(store.status().data == snapshot && store.status().message == "Collections unchanged", "no-op preserves immutable snapshot");
+    send(store, {CollectionAction::favorite, {}, {}, ref("日本")});
+    track.audio_hash = ref("").hash;
+    check(snapshot->favorite(track) && copy.favorite(track) && !store.status().data->favorite(track), "old snapshots survive mutation");
+    write(temp.path(), "{\"version\":2}");
+    send(store, {CollectionAction::add, "Ordered", {}, ref("a")});
+    check(store.status().message.find("changed externally") != std::string::npos && read(temp.path()) == "{\"version\":2}",
+        "no-op still checks external edits");
+}
+void utf8_validation()
+{
+    Temporary temp;
+    CollectionsStore store{temp.path()}; ready(store);
+    send(store, {CollectionAction::create, "Valid 日本 🎵", {}, {}});
+    check(store.status().data->playlists.size() == 1, "valid multibyte names accepted");
+    const auto saved = read(temp.path());
+    for (const auto& bad : std::vector<std::string>{"\x80", "\xc0\xaf", "\xe0\x80\xaf", "\xed\xa0\x80", "\xf0\x80\x80\xaf", "\xf4\x90\x80\x80", "\xf5\x80\x80\x80", "\xe3\x81", "\xc2x"}) {
+        send(store, {CollectionAction::create, bad, {}, {}});
+        send(store, {CollectionAction::rename, "Valid 日本 🎵", bad, {}});
+        send(store, {CollectionAction::favorite, {}, {}, ref(bad)});
+        send(store, {CollectionAction::add, "Valid 日本 🎵", {}, ref(bad)});
+        check(read(temp.path()) == saved && store.status().data->favorites.empty(), "invalid UTF-8 edits rejected transactionally");
+    }
+    for (const auto& entries : {std::string{"[{\"id\":\"one\",\"hash\":\""} + ref("").hash + "\"},{\"id\":\"one\",\"hash\":\"" + ref("").hash + "\"}]",
+                               std::string{"[{\"id\":\"bad\",\"hash\":\"invalid\"}]"}}) {
+        Temporary malformed;
+        write(malformed.path(), "{\"version\":1,\"favorites\":[],\"playlists\":[{\"name\":\"Bad\",\"tracks\":" + entries + "}]}");
+        CollectionsStore invalid{malformed.path()}; ready(invalid);
+        check(!invalid.status().writable, "model validation rejects duplicate/invalid decoded playlist members");
+    }
+}
 }
 int main()
 {
-    try { lifecycle(); safety(); limits(); std::cout << "Collections private storage, background edits, restart, ordering, missing references and safety tests passed\n"; }
+    try { lifecycle(); safety(); limits(); snapshot_and_noop(); utf8_validation(); std::cout << "Collections private storage, background edits, restart, ordering, missing references and safety tests passed\n"; }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

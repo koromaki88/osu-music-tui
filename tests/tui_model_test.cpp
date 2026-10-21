@@ -1,6 +1,10 @@
 #include "osu_player/library_view.hpp"
 #include "osu_player/terminal_text.hpp"
+#include "../src/tui_panels.hpp"
 
+#include <curses.h>
+
+#include <algorithm>
 #include <clocale>
 #include <iostream>
 #include <limits>
@@ -155,6 +159,61 @@ void test_refreshed_view()
           "refresh handles removal of all visible tracks");
 }
 
+void test_playlist_input()
+{
+    using namespace osu_player;
+    using namespace osu_player::tui_detail;
+    using Kind = PlaylistAction::Kind;
+    Collections data;
+    data.playlists = {{"First", {}}, {"Second", {}}};
+    InfoPanel panel;
+    panel.kind = InfoPanel::Kind::playlists;
+    const auto key = [&](const wint_t value, const bool special = false) { return playlist_key(value, special, panel, data); };
+    check(key('n').kind == Kind::transport && key(KEY_LEFT, true).kind == Kind::transport, "playlist transport routed without edits");
+    check(key('s').kind == Kind::none, "playlist blocks non-transport global controls");
+    key('c');
+    check(panel.name_edit == InfoPanel::NameEdit::create, "create enters editor");
+    check(key('q').kind == Kind::none && key('n').kind == Kind::none && panel.input == "qn", "editor owns quit and playback letters");
+    key(21); key(U'日'); key(U'本'); key(KEY_BACKSPACE, true);
+    check(panel.input == "日", "editor erases a complete UTF-8 character");
+    auto action = key('\n');
+    check(action.kind == Kind::edit && action.edit->action == CollectionAction::create && action.edit->name == "日", "create returns owned edit intent");
+    key('r'); key(21); key('Z'); action = key(KEY_ENTER, true);
+    check(action.edit && action.edit->name == "First" && action.edit->replacement == "Z", "rename captures original target");
+    key('r'); key(27);
+    check(panel.name_edit == InfoPanel::NameEdit::none && panel.input.empty(), "escape cancels name editor");
+    key('x');
+    check(panel.confirm_delete && key('n').kind == Kind::none && !panel.confirm_delete, "any non-y key cancels deletion without transport");
+    key('x'); action = key('y');
+    check(action.edit && action.edit->action == CollectionAction::erase && action.edit->name == "First", "confirmed deletion targets captured list");
+    key(KEY_END, true); action = key('\n');
+    check(action.kind == Kind::browse && action.name == "Second", "browse returns selected name");
+    panel.track = make_library(1).tracks()[0];
+    action = key('a');
+    check(action.edit && action.edit->action == CollectionAction::add && action.edit->track.id == panel.track->stable_id, "add uses owned track snapshot");
+    check(key('b').kind == Kind::library && key('q').kind == Kind::close, "library and close return intents");
+    key('c'); panel.input = std::string(collection_limits::name_bytes - 1, 'x'); key(U'日');
+    check(panel.input.size() == collection_limits::name_bytes - 1, "byte limit does not split UTF-8 input");
+    key('x'); key('y');
+    check(panel.input.size() == collection_limits::name_bytes, "editor enforces shared name limit");
+    key(27); data.playlists.clear(); panel.playlist_row = 0;
+    check(key('\n').kind == Kind::none && key('a').kind == Kind::none, "empty manager cannot browse/add");
+}
+
+void test_scoped_search_equivalence()
+{
+    const auto library = make_library(25);
+    const std::vector<std::size_t> scope{24, 4, 0, 9, 4, 999};
+    for (const auto* query : {"", "ARTIST", "Unique", "日本", "missing", "Song 1"}) {
+        const auto all = library.search(query);
+        std::vector<std::size_t> expected;
+        for (const auto index : scope) {
+            if (std::find(all.begin(), all.end(), index) != all.end()) { expected.push_back(index); }
+        }
+        check(library.search(query, scope) == expected, "scoped search matches full search intersection including ordering/duplicates/stale indices");
+    }
+}
+
 }  // namespace
 
 int main()
@@ -168,6 +227,8 @@ int main()
         test_scoped_view();
         test_terminal_text();
         test_refreshed_view();
+        test_playlist_input();
+        test_scoped_search_equivalence();
         std::cout << "all TUI model/text tests passed\n";
         return 0;
     } catch (const std::exception& error) {

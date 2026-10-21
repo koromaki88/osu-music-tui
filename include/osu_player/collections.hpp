@@ -5,10 +5,17 @@
 #include <filesystem>
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 namespace osu_player {
+namespace collection_limits {
+inline constexpr std::size_t file_bytes = 8 * 1024 * 1024;
+inline constexpr std::size_t entries = 10000;
+inline constexpr std::size_t playlists = 128;
+inline constexpr std::size_t name_bytes = 128;
+inline constexpr std::size_t total_entries = 50000;
+inline constexpr std::size_t pending_edits = 64;
+}
 struct TrackReference {
     std::string id;
     std::string hash;
@@ -21,9 +28,13 @@ struct Playlist {
 struct Collections {
     std::vector<TrackReference> favorites;
     std::vector<Playlist> playlists;
-    std::unordered_set<std::string> favorite_keys;
     [[nodiscard]] bool favorite(const Track& track) const;
     [[nodiscard]] std::vector<std::size_t> resolve(const Library& library, bool favorites_view, const std::string& name) const;
+    // Index uses positions, not string_views, so immutable snapshot copies remain
+    // self-contained. Rebuild after a validated mutation, before publication.
+    void rebuild_favorite_index();
+private:
+    std::vector<std::size_t> favorite_order_;
 };
 enum class CollectionAction { favorite, create, rename, erase, add, remove, earlier, later };
 struct CollectionEdit {

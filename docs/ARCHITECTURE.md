@@ -72,8 +72,10 @@ files. Only applied search edits are saved; playback state is never restored.
 Terminal metadata is control/escape-sanitized and clipped by cell width. Full emoji
 grapheme-cluster modeling is not implemented.
 
-Help/details in `tui_command.cpp` reuse the library viewport rather than creating
-separate blocking ncurses loops. An owned details snapshot avoids dangling library
+Help/details reuse the library viewport rather than creating separate blocking
+ncurses loops. `tui_panels.hpp/.cpp` owns panel state/content and pure playlist input
+handling; `tui_command.cpp` renders and dispatches the returned intents to playback
+or the collection worker. An owned details snapshot avoids dangling library
 references across refresh. Panel input scrolls independently; only explicitly allowed
 transport controls pass through. `wrap_terminal_text` sanitizes and wraps by cell
 width with an 8,192-codepoint budget per field. Wrapped lines are cached until width
@@ -91,16 +93,25 @@ the whole library and probe results are not persisted in the library cache.
 
 ## Collections and scoped queues
 
-`collections.hpp/.cpp` owns one sleeping worker, a bounded FIFO edit mailbox, and
-immutable shared snapshots. Private storage is descriptor-anchored, exclusively
+`collections.hpp` exposes the store API, snapshots and centralized capacity limits.
+`collections.cpp` owns one sleeping worker and a bounded FIFO edit mailbox.
+`collections_model.cpp` handles edits, validation and reference lookup;
+`collections_file.hpp/.cpp` is the internal JSON/private-file boundary.
+Immutable shared snapshots reach the UI only after a successful save. Private storage is descriptor-anchored, exclusively
 locked, bounded, UTF-8/version validated, and atomically replaced with file/directory
 fsync. Changes become visible only after saving; failures retain the previous
-snapshot. Save checks detect external content edits. UI snapshot polling is limited
+snapshot. Unchanged serialized edits retain the existing snapshot and skip file
+replacement/fsync, but still read/check for external edits. Direct edits validate
+UTF-8 without re-parsing a serialized copy. UI snapshot polling is limited
 to the existing 100 ms rendering cadence; no disk I/O runs on the control thread.
 
-References pair stable ID with audio hash. Resolution is explicit and preserves
-saved order while retaining unavailable members in storage. `LibraryView` intersects
-search with an optional ordered scope without changing playback. `play_queue`
+References pair stable ID with audio hash. Favorite markers binary-search a sorted
+index of owned positions without allocating temporary keys; copying a snapshot
+does not leave borrowed pointers. Resolution indexes only requested references with
+call-local string views, scans the library, and preserves saved order while retaining
+unavailable members in storage. `LibraryView` searches only its optional ordered
+scope rather than searching the full library and filtering afterwards; this does
+not change playback. `play_queue`
 validates unique indices/selection before replacing the active queue; a separate
 canonical order restores playlist order when shuffle is disabled. Refresh remaps
 the scoped queue by identity without appending unrelated library entries. Failure

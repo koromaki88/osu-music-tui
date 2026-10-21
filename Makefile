@@ -21,14 +21,14 @@ ifeq ($(SANITIZE),1)
     LDFLAGS += -fsanitize=address,undefined
 endif
 
-CORE_OBJECTS := obj/library.o obj/library_loader.o obj/storage_path.o obj/track.o obj/player_controller.o obj/playback_events.o obj/discord_presence.o obj/lastfm_client.o obj/lastfm_queue.o obj/lastfm_presence.o obj/library_view.o obj/terminal_text.o obj/library_refresh.o obj/settings.o obj/collections.o
+CORE_OBJECTS := obj/library.o obj/library_loader.o obj/storage_path.o obj/track.o obj/player_controller.o obj/playback_events.o obj/discord_presence.o obj/lastfm_client.o obj/lastfm_queue.o obj/lastfm_presence.o obj/library_view.o obj/terminal_text.o obj/library_refresh.o obj/settings.o obj/collections.o obj/collections_file.o obj/collections_model.o
 AUDIO_OBJECTS := obj/audio_probe.o obj/audio_player.o
-PLAYER_OBJECTS := obj/main.o obj/play_command.o obj/tui_command.o $(AUDIO_OBJECTS) $(CORE_OBJECTS)
+PLAYER_OBJECTS := obj/main.o obj/play_command.o obj/tui_command.o obj/tui_panels.o $(AUDIO_OBJECTS) $(CORE_OBJECTS)
 STORAGE_TEST_OBJECTS := obj/storage_path_test.o $(CORE_OBJECTS)
 LIBRARY_TEST_OBJECTS := obj/library_test.o $(CORE_OBJECTS)
 AUDIO_TEST_OBJECTS := obj/audio_player_test.o $(AUDIO_OBJECTS)
 CONTROLLER_TEST_OBJECTS := obj/player_controller_test.o $(CORE_OBJECTS)
-TUI_TEST_OBJECTS := obj/tui_model_test.o $(CORE_OBJECTS)
+TUI_TEST_OBJECTS := obj/tui_model_test.o obj/tui_panels.o $(CORE_OBJECTS)
 PLAYBACK_TEST_OBJECTS := obj/playback_events_test.o $(CORE_OBJECTS)
 DISCORD_TEST_OBJECTS := obj/discord_presence_test.o $(CORE_OBJECTS)
 LASTFM_TEST_OBJECTS := obj/lastfm_test.o $(CORE_OBJECTS)
@@ -90,7 +90,7 @@ bin/lastfm-tests: $(LASTFM_TEST_OBJECTS) | bin
 bin/lastfm-scrobble-tests: $(SCROBBLE_TEST_OBJECTS) | bin
 	$(CXX) $(LDFLAGS) $^ $(shell $(PKG_CONFIG) --libs json-c libcurl libcrypto) -pthread -o $@
 
-bin/collections-tests: obj/collections_test.o obj/collections.o obj/library.o obj/track.o obj/storage_path.o | bin
+bin/collections-tests: obj/collections_test.o obj/collections.o obj/collections_file.o obj/collections_model.o obj/library.o obj/track.o obj/storage_path.o | bin
 	$(CXX) $(LDFLAGS) $^ $(shell $(PKG_CONFIG) --libs json-c) -pthread -o $@
 
 obj/%.o: src/%.cpp | obj

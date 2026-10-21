@@ -53,6 +53,8 @@ add_library(osu_player_core
     src/library_refresh.cpp
     src/settings.cpp
     src/collections.cpp
+    src/collections_file.cpp
+    src/collections_model.cpp
 )
 
 target_include_directories(osu_player_core PUBLIC include)
@@ -69,7 +71,7 @@ target_link_libraries(osu_player_audio PRIVATE PkgConfig::FFMPEG PkgConfig::SDL2
 osu_player_set_warnings(osu_player_audio)
 osu_player_enable_sanitizers(osu_player_audio)
 
-add_executable(osu-player src/main.cpp src/play_command.cpp src/tui_command.cpp)
+add_executable(osu-player src/main.cpp src/play_command.cpp src/tui_command.cpp src/tui_panels.cpp)
 
 target_link_libraries(osu-player PRIVATE osu_player_core osu_player_audio PkgConfig::NCURSESW PkgConfig::FFMPEG)
 osu_player_set_warnings(osu-player)
@@ -129,8 +131,8 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/discord_integration.py
         --test-binary $<TARGET_FILE:discord-presence-tests> --player-binary $<TARGET_FILE:osu-player>)
 
-    add_executable(tui-model-tests tests/tui_model_test.cpp)
-    target_link_libraries(tui-model-tests PRIVATE osu_player_core)
+    add_executable(tui-model-tests tests/tui_model_test.cpp src/tui_panels.cpp)
+    target_link_libraries(tui-model-tests PRIVATE osu_player_core PkgConfig::NCURSESW)
     osu_player_set_warnings(tui-model-tests)
     osu_player_enable_sanitizers(tui-model-tests)
     add_test(NAME tui-model COMMAND tui-model-tests)

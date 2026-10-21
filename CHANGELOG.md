@@ -2,12 +2,19 @@
 
 ## Unreleased
 
+- Reduced favorites rendering allocations and collection-resolution scratch memory;
+  scoped searches now inspect only the browsed list instead of the entire library.
+- Separated collection models/validation, private file handling, and worker dispatch;
+  extracted panel content and playlist input handling from the main TUI loop.
+- Avoid redundant collection-file replacement/fsync for unchanged edits while still
+  checking for external modifications; added snapshot, UTF-8 and input-routing tests.
 - Simplified the main keybind footer to basic playback/search controls; advanced
   shortcuts, including Last.fm setup, remain in `?` help.
 - Added local favorites (`f`/`F`) and named playlists (`P`): persistent background
   saves, add/remove/reorder, rename/delete confirmation, and missing-track retention.
 - List playback uses dedicated queue snapshots: next/previous, shuffle and repeat
   stay in the chosen list; browsing/editing never interrupts playback.
+
 ## 0.4.1
 
 - Moved Last.fm setup to uppercase `L`; added `h`/`l` seek aliases and enabled
