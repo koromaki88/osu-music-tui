@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added uppercase `J` to reveal/select the current track without changing playback
+  or its queue; hidden tracks open in the full library with search cleared.
+
 ## 0.5.0
 
 - Refreshed AppImage build-time certificate trust and added an offline release gate

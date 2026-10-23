@@ -40,6 +40,7 @@ handled signals restore terminal settings.
 | `j` / `k`, Down / Up | Move selection |
 | PageDown / PageUp | Page through results |
 | `g` / `G`, Home / End | First/last result |
+| `J` (uppercase) | Select and reveal the current track; if hidden, switch to full library and clear search |
 | Enter | Play selection |
 | Space | Pause/resume; start selection if nothing is loaded |
 | `n` / `p` | Next/previous in queue |
@@ -65,6 +66,11 @@ Search filters as you type. Enter applies the filter; press Enter again to play.
 Esc cancels the edit, Backspace removes one UTF-8 codepoint, and Ctrl-U clears the query.
 Matching is ASCII-case-insensitive and supports exact Unicode text. Filtering does
 not change the playback queue or interrupt audio.
+
+Outside panels and text entry, `J` reveals the current track without restarting it
+or changing its queue, shuffle, repeat, or pause state. A visible track keeps the
+current list/filter; a hidden track switches the browser to the unfiltered library.
+With no current track, it only shows a notice.
 
 ### Help and track details
 

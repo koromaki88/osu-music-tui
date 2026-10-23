@@ -49,6 +49,14 @@ void LibraryView::move(const int delta)
 
 void LibraryView::home() { selected_ = 0; ensure_visible(); }
 void LibraryView::end() { selected_ = matches_.empty() ? 0 : matches_.size() - 1; ensure_visible(); }
+bool LibraryView::select_index(const std::size_t index)
+{
+    const auto found = std::find(matches_.begin(), matches_.end(), index);
+    if (found == matches_.end()) { return false; }
+    selected_ = static_cast<std::size_t>(found - matches_.begin());
+    ensure_visible();
+    return true;
+}
 void LibraryView::page_up() { selected_ -= std::min(selected_, page_size_); ensure_visible(); }
 
 void LibraryView::page_down()

@@ -714,6 +714,15 @@ int run_tui_command(RefreshOptions options)
                     else if (tui_detail::panel_transport_key(key, special)) {
                         running = normal_key(key, special, player, view, searching, saved_query, play_selection);
                     }
+                } else if (result != KEY_CODE_YES && key == 'J') {
+                    if (const auto current = player.current_index()) {
+                        if (!view.select_index(*current)) {
+                            select_source(Browse::library);
+                            view.set_query("");
+                            saved_query.clear();
+                            (void)view.select_index(*current);
+                        }
+                    } else { notice = "No current track to jump to."; }
                 } else if (result != KEY_CODE_YES && key == 'L') {
                     if (lastfm) {
                         lastfm_enabled = true;

@@ -214,6 +214,20 @@ void test_scoped_search_equivalence()
     }
 }
 
+void test_select_index()
+{
+    const auto library = make_library(100);
+    osu_player::LibraryView view{library};
+    view.set_page_size(10);
+    check(view.select_index(90) && view.selected_index() == 90 && view.top() == 81, "select reveals off-screen current track");
+    check(view.select_index(2) && view.top() == 2, "select scrolls upward");
+    check(!view.select_index(999) && view.selected_index() == 2 && view.top() == 2, "absent index leaves viewport untouched");
+    view.set_scope(std::vector<std::size_t>{90, 2, 42});
+    check(view.select_index(42) && view.selected_row() == 2, "select uses scoped row rather than library index");
+    view.set_query("missing");
+    check(!view.select_index(42) && view.matches().empty(), "select does not implicitly change filter");
+}
+
 }  // namespace
 
 int main()
@@ -229,6 +243,7 @@ int main()
         test_refreshed_view();
         test_playlist_input();
         test_scoped_search_equivalence();
+        test_select_index();
         std::cout << "all TUI model/text tests passed\n";
         return 0;
     } catch (const std::exception& error) {

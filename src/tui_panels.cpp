@@ -34,7 +34,7 @@ std::vector<std::string> panel_content(const InfoPanel& panel, const Collections
     if (panel.kind == InfoPanel::Kind::help) {
         return {
             "BROWSE AND SEARCH", "j/k or Up/Down: select track. Enter: play selection.",
-            "PageUp/PageDown: page. g/G or Home/End: first/last result.",
+            "PageUp/PageDown: page. g/G or Home/End: first/last result. J: jump to current track.",
             "/: search. Enter applies; Esc cancels edits or clears an applied filter.",
             "Search: Backspace removes a character; Ctrl-U clears. Filtering does not change the queue.", "",
             "PLAYBACK", "Space: pause/resume (start selection if nothing is loaded).",

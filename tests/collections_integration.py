@@ -40,6 +40,8 @@ def exercise(executable, root):
     environment = {"XDG_CONFIG_HOME": str(config), "OSU_PLAYER_DISCORD_SOCKET": str(root / "absent.sock")}
     with Session(executable, library, **environment) as session:
         session.expect("Library: 3", "State: stopped")
+        session.send("J")
+        session.expect("No current track to jump to.", "State: stopped", "Now: No track selected")
         session.send("F")
         session.expect("View: Favorites", "Matches: 0", "State: stopped")
         session.send("Ff")
@@ -51,6 +53,21 @@ def exercise(executable, root):
         session.expect("View: Favorites", "Queue: Favorites", "Now: Collections — Alpha", "State: playing")
         session.send("n")
         session.expect("Now: Collections — Beta")
+        session.send("gJi")
+        session.expect("Title: Beta", "State: playing")
+        session.send("q /Alpha\nJ")  # Pause, then reveal the track hidden by search.
+        session.expect("Library (Enter plays selection", "Matches: 3", "Queue: Favorites", "Now: Collections — Beta", "State: paused")
+        session.send("i")
+        session.expect("Title: Beta")
+        session.send("qGiJ")  # J must not hijack a details panel.
+        session.expect("Title: Gamma", "State: paused")
+        session.send("q/J")  # In search entry J is literal text, not navigation.
+        session.expect("Matches: 0", "State: paused")
+        session.send("\x1bF")
+        session.expect("View: Favorites", "Matches: 2")
+        session.send("g/J\x1bJ i")  # Cancel search, jump within favorites, resume, inspect.
+        session.expect("Title: Beta", "State: playing")
+        session.send("q")
         session.send("psn")
         session.expect("Shuffle: on", "Now: Collections — Beta")
         session.send("ps")
@@ -83,6 +100,12 @@ def exercise(executable, root):
         session.send("u")
         saved(path, lambda data: len(data["playlists"][0]["tracks"]) == 1)
         session.expect("Matches: 1", "Now: Collections — Beta")
+        session.send("Ji")  # Current queue snapshot contains a removed list member.
+        session.expect("Title: Beta", "State: playing")
+        session.send("q")
+        session.expect("Library (Enter plays selection", "Matches: 3", "Queue: Playlist: Mix 日本")
+        session.send("P\n")  # Restore browsing without replacing the active queue.
+        session.expect("View: Playlist: Mix 日本", "Matches: 1")
         session.send("n")
         session.expect("Now: Collections — Alpha")
         session.send("p")

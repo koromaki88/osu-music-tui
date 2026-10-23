@@ -23,6 +23,9 @@ public:
     void move(int delta);
     void home();
     void end();
+    // Select an existing visible match and reveal it; leave the view unchanged
+    // if the library index is absent from the current scope/search results.
+    [[nodiscard]] bool select_index(std::size_t index);
     void page_up();
     void page_down();
     // Call after the referenced Library is replaced; old row indices are stale.
