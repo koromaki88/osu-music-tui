@@ -20,9 +20,9 @@ class ArchPackagingTests(unittest.TestCase):
             root = Path(directory) / "source"
             output = Path(directory) / "output"
             output.mkdir()
-            files = {"Makefile": "all:", "src/main.cpp": "// source",
+            files = {"Makefile": "all:", "VERSION": builder.VERSION, "src/main.cpp": "// source",
                      "tools/osu-indexer/packages.arch.lock.json": "{}",
-                     "packaging/arch/PKGBUILD": "sha256sums=('@SOURCE_SHA256@')",
+                      "packaging/arch/PKGBUILD": "pkgver=@VERSION@\nsha256sums=('@SOURCE_SHA256@')",
                      ".tools/dotnet/dotnet": "sdk", "osu.AppImage": "game",
                      "artifacts/private/client.realm": "private", "tests/__pycache__/x.pyc": "cache",
                      "tests/osu-indexer-tests/bin/Release/app.dll": "binary"}
@@ -36,11 +36,11 @@ class ArchPackagingTests(unittest.TestCase):
             with tarfile.open(archive) as packaged:
                 names = set(packaged.getnames())
             self.assertEqual(names, {f"{builder.NAME}/{name}" for name in (
-                "Makefile", "src/main.cpp", "tools/osu-indexer/packages.arch.lock.json",
+                 "Makefile", "VERSION", "src/main.cpp", "tools/osu-indexer/packages.arch.lock.json",
                 "packaging/arch/PKGBUILD")})
             with archive.open("rb") as stream:
                 digest = hashlib.file_digest(stream, "sha256").hexdigest()
-            self.assertEqual((output / "PKGBUILD").read_text(), f"sha256sums=('{digest}')")
+            self.assertEqual((output / "PKGBUILD").read_text(), f"pkgver={builder.VERSION}\nsha256sums=('{digest}')")
 
 
 if __name__ == "__main__":

@@ -138,7 +138,7 @@ class PackagingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "source"
             destination = Path(temporary) / "snapshot"
-            for name in ("Makefile", "src/main.cpp", ".tools/dotnet10/dotnet", "osu.AppImage",
+            for name in ("Makefile", "VERSION", "src/main.cpp", ".tools/dotnet10/dotnet", "osu.AppImage",
                          "artifacts/private/client.realm", "tests/osu-indexer-tests/bin/test.dll"):
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -146,7 +146,7 @@ class PackagingTests(unittest.TestCase):
             (root / "src/private.cpp").symlink_to(root / "artifacts/private/client.realm")
             builder.source_snapshot(root, destination)
             self.assertEqual({str(path.relative_to(destination)) for path in destination.rglob("*") if path.is_file()},
-                             {"Makefile", "src/main.cpp"})
+                              {"Makefile", "VERSION", "src/main.cpp"})
 
     def test_toolchain_cleanup_never_prunes_global_docker_state(self):
         with patch.object(builder.subprocess, "run") as commands:

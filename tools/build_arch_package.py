@@ -12,11 +12,12 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
-NAME = "osu-music-player-0.6.0"
+VERSION = (ROOT / "VERSION").read_text().strip()
+NAME = f"osu-music-player-{VERSION}"
 
 
 def source_files(root):
-    patterns = ("Makefile", "README.md", "DEVELOPMENT.md", "CHANGELOG.md", "docs/*.md", "src/*.cpp", "src/*.hpp", "include/osu_player/*.hpp",
+    patterns = ("Makefile", "VERSION", "README.md", "DEVELOPMENT.md", "CHANGELOG.md", "docs/*.md", "src/*.cpp", "src/*.hpp", "include/osu_player/*.hpp",
                 "tests/*.cpp", "tests/*.hpp", "tests/*.py", "tests/fixtures/*.ndjson",
                 "tests/osu-indexer-tests/*.cs", "tests/osu-indexer-tests/*.csproj",
                 "tests/osu-indexer-tests/packages.lock.json",
@@ -39,7 +40,7 @@ def snapshot(root, destination):
     with archive.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
     recipe = (root / "packaging/arch/PKGBUILD").read_text()
-    (destination / "PKGBUILD").write_text(recipe.replace("@SOURCE_SHA256@", digest))
+    (destination / "PKGBUILD").write_text(recipe.replace("@SOURCE_SHA256@", digest).replace("@VERSION@", VERSION))
 
 
 def main():

@@ -98,7 +98,9 @@ See [Packaging](docs/PACKAGING.md) for requirements and commands.
 
 1. Run native and relevant synthetic indexer tests. Never launch osu! or scan the
    real library as part of package validation.
-2. Review version/package revision and release notes. An Arch packaging-only rebuild
+2. Update the root `VERSION` file for a release; native title/user agent, CMake and
+   packaging metadata derive from it. Update release notes/user-facing examples as
+   appropriate and review the Arch `pkgrel`. An Arch packaging-only rebuild
    needs an appropriate package revision.
 3. Run the approved format's package validation. Retain displayed output, saved logs,
    failure status, checksums, and manifests. Preserve old artifacts.

@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(osu_music_player VERSION 0.6.0 LANGUAGES CXX)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" OSU_PLAYER_VERSION)
+string(STRIP "${OSU_PLAYER_VERSION}" OSU_PLAYER_VERSION)
+project(osu_music_player VERSION ${OSU_PLAYER_VERSION} LANGUAGES CXX)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 
 option(OSU_PLAYER_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
@@ -60,6 +63,7 @@ add_library(osu_player_core
 )
 
 target_include_directories(osu_player_core PUBLIC include)
+target_compile_definitions(osu_player_core PUBLIC OSU_PLAYER_VERSION="${PROJECT_VERSION}")
 target_link_libraries(osu_player_core PRIVATE PkgConfig::JSON_C PkgConfig::CURL PkgConfig::CRYPTO Threads::Threads)
 osu_player_set_warnings(osu_player_core)
 osu_player_enable_sanitizers(osu_player_core)

@@ -1,4 +1,5 @@
 #include "osu_player/lastfm_client.hpp"
+#include "osu_player/version.hpp"
 #include "osu_player/settings.hpp"
 #include "lastfm_storage.hpp"
 
@@ -288,7 +289,7 @@ LastfmResponse lastfm_https(const LastfmParameters& parameters, const LastfmCanc
     option(CURLOPT_POST, 1L);
     option(CURLOPT_POSTFIELDS, body.c_str());
     option(CURLOPT_POSTFIELDSIZE, static_cast<long>(body.size()));
-    option(CURLOPT_USERAGENT, "osu-music-player/0.6.0");
+    option(CURLOPT_USERAGENT, application_user_agent);
     option(CURLOPT_CONNECTTIMEOUT_MS, 3000L);
     option(CURLOPT_TIMEOUT_MS, 8000L);
     option(CURLOPT_NOSIGNAL, 1L);

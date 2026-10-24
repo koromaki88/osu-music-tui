@@ -79,7 +79,7 @@ def main():
             appdir = moved / "squashfs-root"
             launcher = str(appdir / "AppRun")
             manifest = json.loads((appdir / "usr/share/osu-player/build-manifest.json").read_text())
-            assert manifest["version"] == "0.6.0"
+            assert manifest["version"] == (ROOT / "VERSION").read_text().strip()
             certificates = appdir / "usr/share/osu-player/ca-certificates.crt"
             assert hashlib.sha256(certificates.read_bytes()).hexdigest() == manifest["ca_bundle_sha256"]
             assert check_ca_bundle(certificates) == manifest["ca_bundle_check"]

@@ -12,7 +12,8 @@ ARCH_PACKAGE_FLAGS ?=
 export DOTNET_CLI_TELEMETRY_OPTOUT := 1
 
 PACKAGES := libavformat libavcodec libavutil libswresample json-c sdl2 ncursesw libcurl libcrypto
-CPPFLAGS = -Iinclude $(shell $(PKG_CONFIG) --cflags $(PACKAGES))
+VERSION := $(strip $(shell cat VERSION))
+CPPFLAGS = -Iinclude -DOSU_PLAYER_VERSION='"$(VERSION)"' $(shell $(PKG_CONFIG) --cflags $(PACKAGES))
 CXXFLAGS := -std=c++20 -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -MMD -MP -pthread
 LDLIBS = $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -pthread
 
@@ -43,7 +44,7 @@ all: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-te
 RELEASE_SOURCES := $(wildcard src/*.cpp)
 release: $(RELEASE_DIR)/osu-player
 
-$(RELEASE_DIR)/osu-player: $(RELEASE_SOURCES) $(wildcard include/osu_player/*.hpp src/*.hpp) Makefile
+$(RELEASE_DIR)/osu-player: $(RELEASE_SOURCES) $(wildcard include/osu_player/*.hpp src/*.hpp) Makefile VERSION
 	@mkdir -p "$(@D)"
 	$(CXX) $(CPPFLAGS) -std=c++20 $(RELEASE_CXXFLAGS) -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -pthread $(RELEASE_SOURCES) $(LDFLAGS) $(LDLIBS) -o "$@"
 
@@ -98,6 +99,9 @@ bin/browser-overlay-tests: obj/browser_overlay_test.o obj/browser_overlay.o obj/
 
 obj/%.o: src/%.cpp | obj
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+# These compilation units embed the version; changing VERSION must rebuild them.
+obj/tui_command.o obj/lastfm_client.o: VERSION
 
 obj/%_test.o: tests/%_test.cpp | obj
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@

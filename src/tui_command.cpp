@@ -11,6 +11,7 @@
 #include "track_details_probe.hpp"
 #include "tui_panels.hpp"
 #include "osu_player/browser_overlay.hpp"
+#include "osu_player/version.hpp"
 
 #include <curses.h>
 #include <unistd.h>
@@ -303,7 +304,7 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
         return;
     }
 
-    draw(0, 0, "osu! music player | Discord: " + discord_status + " | Last.fm: " +
+    draw(0, 0, "osu! music player v" + std::string{application_version} + " | Discord: " + discord_status + " | Last.fm: " +
          std::string{lastfm_phase_name(lastfm_status.phase)} + overlay_label, columns, A_BOLD, colors ? 1 : 0);
     const std::string summary = "Library: " + std::to_string(player.library().tracks().size()) +
         " | Matches: " + std::to_string(view.matches().size()) +

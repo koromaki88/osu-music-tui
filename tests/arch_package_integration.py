@@ -16,6 +16,7 @@ from overlay_integration import exercise as exercise_overlay
 
 
 ROOT = Path(__file__).resolve().parent.parent
+VERSION = (ROOT / "VERSION").read_text().strip()
 
 
 def fingerprint(root):
@@ -26,7 +27,7 @@ def fingerprint(root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path,
-                        default=ROOT / "artifacts/arch/osu-music-player-0.6.0-1-x86_64.pkg.tar.zst")
+                        default=ROOT / f"artifacts/arch/osu-music-player-{VERSION}-1-x86_64.pkg.tar.zst")
     parser.add_argument("--dotnet", default="dotnet")
     options = parser.parse_args()
     package = options.package.resolve()
@@ -39,7 +40,7 @@ def main():
         unpacked.mkdir()
         subprocess.run(["bsdtar", "-xf", str(package), "-C", str(unpacked)], check=True)
         metadata = (unpacked / ".PKGINFO").read_text()
-        assert "pkgver = 0.6.0-1" in metadata
+        assert f"pkgver = {VERSION}-1\n" in metadata
         for dependency in ("curl", "openssl", "ca-certificates"):
             assert f"depend = {dependency}\n" in metadata
         assert "depend = dotnet-runtime-10.0" in metadata
