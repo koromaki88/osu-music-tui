@@ -12,7 +12,7 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
-NAME = "osu-music-player-0.5.0"
+NAME = "osu-music-player-0.6.0"
 
 
 def source_files(root):

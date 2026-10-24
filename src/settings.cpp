@@ -105,6 +105,13 @@ Settings load_settings(const std::filesystem::path& path)
             settings.lastfm_enabled = json_object_get_boolean(enabled) != 0;
         }
     }
+    if (const auto overlay = field(root.get(), "overlay")) {
+        if (!json_object_is_type(overlay, json_type_object)) { invalid(); }
+        if (const auto enabled = field(overlay, "enabled")) {
+            if (!json_object_is_type(enabled, json_type_boolean)) { invalid(); }
+            settings.overlay_enabled = json_object_get_boolean(enabled) != 0;
+        }
+    }
     return settings;
 }
 
@@ -124,6 +131,9 @@ void save_settings(const std::filesystem::path& path, const Settings& settings)
     auto* lastfm = json_object_new_object();
     json_object_object_add(root.get(), "lastfm", lastfm);
     json_object_object_add(lastfm, "enabled", json_object_new_boolean(settings.lastfm_enabled));
+    auto* overlay = json_object_new_object();
+    json_object_object_add(root.get(), "overlay", overlay);
+    json_object_object_add(overlay, "enabled", json_object_new_boolean(settings.overlay_enabled));
     const std::string data = std::string{json_object_to_json_string_ext(root.get(), JSON_C_TO_STRING_PRETTY)} + '\n';
     std::filesystem::create_directories(path.parent_path());
     std::string pattern = (path.parent_path() / ".settings-XXXXXX").string();

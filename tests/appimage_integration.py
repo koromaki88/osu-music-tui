@@ -20,6 +20,7 @@ from tui_integration import Session, exercise_settings, exercise_ui, exercise_la
 from discord_integration import tui_tests as exercise_discord
 from lastfm_integration import exercise_lastfm_https
 from collections_integration import exercise as exercise_collections
+from overlay_integration import exercise as exercise_overlay
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -78,7 +79,7 @@ def main():
             appdir = moved / "squashfs-root"
             launcher = str(appdir / "AppRun")
             manifest = json.loads((appdir / "usr/share/osu-player/build-manifest.json").read_text())
-            assert manifest["version"] == "0.5.0"
+            assert manifest["version"] == "0.6.0"
             certificates = appdir / "usr/share/osu-player/ca-certificates.crt"
             assert hashlib.sha256(certificates.read_bytes()).hexdigest() == manifest["ca_bundle_sha256"]
             assert check_ca_bundle(certificates) == manifest["ca_bundle_check"]
@@ -111,6 +112,9 @@ def main():
             collections_root = root / "collections"
             collections_root.mkdir()
             exercise_collections(launcher, collections_root)
+            overlay_root = root / "overlay"
+            overlay_root.mkdir()
+            exercise_overlay(launcher, overlay_root)
             exercise_lastfm_https(launcher, root / "lastfm-https", openssl)
             discord_root = root / "discord"
             discord_root.mkdir()

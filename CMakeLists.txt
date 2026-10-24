@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(osu_music_player VERSION 0.5.0 LANGUAGES CXX)
+project(osu_music_player VERSION 0.6.0 LANGUAGES CXX)
 
 option(OSU_PLAYER_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
@@ -55,6 +55,8 @@ add_library(osu_player_core
     src/collections.cpp
     src/collections_file.cpp
     src/collections_model.cpp
+    src/browser_overlay.cpp
+    src/overlay_config.cpp
 )
 
 target_include_directories(osu_player_core PUBLIC include)
@@ -98,6 +100,12 @@ if(BUILD_TESTING)
     osu_player_enable_sanitizers(collections-tests)
     add_test(NAME collections COMMAND collections-tests)
 
+    add_executable(browser-overlay-tests tests/browser_overlay_test.cpp)
+    target_link_libraries(browser-overlay-tests PRIVATE osu_player_core)
+    osu_player_set_warnings(browser-overlay-tests)
+    osu_player_enable_sanitizers(browser-overlay-tests)
+    add_test(NAME browser-overlay COMMAND browser-overlay-tests)
+
     add_executable(player-controller-tests tests/player_controller_test.cpp)
     target_link_libraries(player-controller-tests PRIVATE osu_player_core)
     osu_player_set_warnings(player-controller-tests)
@@ -140,6 +148,9 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/tui_integration.py --player-binary $<TARGET_FILE:osu-player>)
     add_test(NAME collections-ui COMMAND Python3::Interpreter
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/collections_integration.py --player-binary $<TARGET_FILE:osu-player>)
+    add_test(NAME overlay COMMAND Python3::Interpreter
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/overlay_integration.py --player-binary $<TARGET_FILE:osu-player>)
+    set_tests_properties(overlay browser-overlay PROPERTIES RESOURCE_LOCK obs_overlay_port)
     add_test(NAME refresh COMMAND Python3::Interpreter
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/refresh_integration.py --player-binary $<TARGET_FILE:osu-player>)
 

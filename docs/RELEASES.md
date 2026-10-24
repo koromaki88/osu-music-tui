@@ -10,6 +10,78 @@ All package validation used synthetic libraries/audio and fake services only.
 It did not launch the game, scan a real library, install or publish packages,
 or create commits/tags.
 
+## 0.6.0 — optional OBS overlay
+
+Both formats were rebuilt and passed package validation. Native `make -j4 test`
+and synthetic `make test-indexer` passed before packaging and within the builds.
+Extracted-package tests now exercise the actual overlay worker in both formats,
+including port conflict/retry, HTTP boundaries/privacy, playback/seek/idle, slow clients,
+saved enablement without autoplay, live config/rollback and thumbnail URL suppression.
+No real artwork or live integration service was contacted by these tests.
+
+| Artifact | Size | Result |
+|---|---|---|
+| `artifacts/dist/osu-player-x86_64.AppImage` | 101.3 MiB | Passed `make test-appimage` after test-only notice assertion fix |
+| `artifacts/arch/osu-music-player-0.6.0-1-x86_64.pkg.tar.zst` | 4.5 MiB | Passed `make test-arch-package` with private SDK / `--nodeps` |
+
+- **AppImage SHA-256:** `edf1e1837a8027bb6916b3254d288434aa2725432a51def79a94ce660a38cbd0`
+- **Arch SHA-256:** `eb82a625a312b91760feba6cdb28141ecbc4351d8ac21c14c7b7497e3b6bb736`
+- **Evidence:** `artifacts/releases/0.6.0/verified-artifacts.json`, `logs/`, `arch-logs/`.
+  Both exported checksums were independently verified. AppImage baseline remains
+  x86-64/glibc 2.36 with .NET runtime 10.0.13; extracted CA fallback gate passed.
+- **Initial failure:** `logs/test-appimage-collections-notice-failure.log` is retained.
+  A transient collections warning was overwritten by library-load status; the test
+  now checks the persistent playlists panel. No production behavior changed. Arch
+  passed with the earlier test assertion; the successful AppImage retry includes
+  the test-only correction.
+- **Preserved:** previous AppImage/checksum/manifest under
+  `artifacts/releases/0.5.1/appimage/`, previous Arch recipe under `0.5.1/arch/`,
+  and older versioned Arch packages/source snapshots left in place.
+- **Release notes:** `artifacts/releases/0.6.0/release-notes.md`; copyable notes at
+  `/tmp/opencode/osu-player-0.6.0-release-notes.md`. Requested 0.5.1 notes were written
+  first to `/tmp/opencode/osu-player-0.5.1-release-notes.md`.
+
+Actual OBS/CEF rendering/font availability remains a manual check. Arch installation
+and pacman dependency resolution, AppImage FUSE mounting and CMake/Ninja remain
+unverified. No game launch, real-library scan, installation, publication or commit/tag
+occurred. Public distribution remains blocked on licensing/compliance review. This
+record was added after building and is not embedded in the packages.
+
+## 0.5.1 — jump to current track
+
+Both formats were rebuilt with uppercase `J` navigation and passed their package
+validation. Native `make -j4 test` and synthetic `make test-indexer` passed before
+packaging and again within the builds. Extracted-package collections tests cover
+jumping within favorites, revealing tracks hidden by search or saved-list edits,
+paused-state/queue preservation, and isolation from panels/search entry.
+
+| Artifact | Size | Result |
+|---|---|---|
+| `artifacts/dist/osu-player-x86_64.AppImage` | 101.3 MiB | Passed `make test-appimage` |
+| `artifacts/arch/osu-music-player-0.5.1-1-x86_64.pkg.tar.zst` | 4.5 MiB | Passed `make test-arch-package` with private SDK / `--nodeps` |
+
+Both exported SHA-256 files were independently verified:
+
+- **AppImage:** `6a93c30ac99de2398cfcea5895794c1d24a47cef37f549ede8b7497fbd264fa3`
+- **Arch:** `121731649906c6bebb1e65b50ae0f8a6aa0376ae32ac94b6377997b99ba202d1`
+- **Evidence:** `artifacts/releases/0.5.1/verified-artifacts.json`, `logs/`, and
+  `arch-logs/`; release notes in `artifacts/releases/0.5.1/release-notes.md`.
+- **Preserved:** 0.5.0 AppImage/sidecars under `artifacts/releases/0.5.0/appimage/`,
+  previous Arch recipe under `artifacts/releases/0.5.0/arch/`, and older versioned
+  Arch packages/source archives left in place.
+
+Package coverage also includes synthetic indexing, dummy audio, panels/settings,
+fake Discord and isolated Last.fm HTTPS. AppImage relocation, standalone minimal
+container indexing, CA fallback selection and extracted fallback trust gate passed;
+the baseline remains x86-64/glibc 2.36 with .NET runtime 10.0.13. No new public
+incident-chain verification was performed for this patch.
+
+Arch installation/pacman dependency resolution remains untested (private SDK and
+`--nodeps`); FUSE mounting and CMake/Ninja remain unverified. No game launch,
+real-library scan, installation or publication occurred. These are local unsigned
+candidates, still subject to licensing/compliance review. This record was added
+after building and is not embedded in the packages.
+
 ## 0.5.0 — collections, optimization, and certificate-trust refresh
 
 Both formats were rebuilt and validated. The AppImage passed `make test-appimage`;

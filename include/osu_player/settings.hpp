@@ -15,6 +15,7 @@ struct Settings {
     bool discord_enabled{};
     std::string discord_application_id;
     bool lastfm_enabled{};
+    bool overlay_enabled{};
     bool operator==(const Settings&) const = default;
 };
 

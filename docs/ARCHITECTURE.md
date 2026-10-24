@@ -122,6 +122,56 @@ Unit and PTY tests cover persistence, limits, locks/unsafe links, failed saves,
 external/directory replacement, missing references, list editing, resize, no autoplay,
 shuffle/history/repeat, and scope-preserving refresh.
 
+## Optional OBS browser source
+
+`BrowserOverlay` in `browser_overlay.hpp/.cpp` owns a sleeping worker and a bounded
+latest-value mailbox. The frontend copies only display title/artist, position,
+duration, playing state and a public cover URL derived from a positive online set ID
+from the existing playback snapshot at most twice per
+second while enabled. There is no event backlog, indexing, playback
+mutation or socket I/O on the UI thread for this service. No new native dependency
+is required: JSON uses the existing json-c library, HTTP uses Linux nonblocking sockets.
+
+The worker binds only `127.0.0.1:7270` on opt-in, serves embedded HTML and a JSON
+state endpoint, and closes sockets when disabled or destroyed. HTTP work is bounded
+to eight clients, a 4 KiB request budget, two seconds per connection, and 4 KiB per
+display text field. Slow readers/writers cannot block other clients or shutdown;
+an enabled worker polls at most every 100 ms while waiting, a disabled worker sleeps
+on a condition variable. Bind failure sleeps until reconfiguration rather than retrying.
+
+Exact Host, Origin (when present), and Fetch Metadata checks reject cross-origin
+requests and DNS rebinding. No CORS, arbitrary file/URL routing or mutating endpoints
+are provided. Responses use no-store, nosniff and a restrictive CSP; metadata enters
+the DOM through `textContent`, never HTML. This is unauthenticated loopback sharing,
+not protection against other local processes/users. The page polls every 500 ms,
+times out stalled fetches and clears stale data on disconnect; progress is not animated.
+
+Thumbnails use a fixed `https://assets.ppy.sh/beatmaps/<positive-id>/covers/list@2x.jpg`
+pattern, with a matching browser-side URL check and CSP `img-src` restricted to
+that host. The browser, not the player, fetches public artwork without a referrer.
+There is no proxy, local-file artwork access, upload or server-side image fetch.
+The square image is flex-aligned left of the text; missing/error/idle/disconnected
+states hide it. `show_thumbnail: false` suppresses URLs and requests; size is bounded
+to 32–256 px. Synthetic tests verify URL derivation, disabling and privacy without
+requesting real artwork; actual image rendering/failure behavior needs a visual check.
+
+`overlay_config.hpp/.cpp` reads/validates an owned regular `overlay.json` on the
+worker once per second while enabled (8 KiB limit, no-follow/nonblocking open).
+First successful enable creates private defaults with exclusive creation and never
+overwrites existing data. Defaults and a whitelisted normalized style JSON are
+served through `/style`, not arbitrary config contents. Invalid edits preserve the
+last valid style transactionally and surface a persistent status warning. Numeric
+ranges, strict booleans, #RRGGBB colors and plain font-family names prevent arbitrary
+CSS/script/URL input. The page applies values through individual DOM style properties
+every two seconds; `width: null` clears the optional cap and restores fluid width.
+
+`tests/overlay_integration.py` covers default-off, port conflict/retry, persistence
+without autoplay, metadata/privacy, HTTP boundary checks, pause/seek/idle transitions,
+slow clients and shutdown against the real TUI with synthetic audio. Config unit/integration tests cover creation,
+hot reload, rollback, restart, defaults, bounds and unsafe file types. Actual OBS/CEF
+rendering remains a manual visual check. Routine tests require loopback port 7270
+to be free and never stop any pre-existing service to obtain it.
+
 ## Playback events and listening time
 
 ### Event contract

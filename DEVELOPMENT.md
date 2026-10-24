@@ -38,6 +38,9 @@ Targets display stdout/stderr and save logs, preserving failures with `pipefail`
 Override the directory with `TEST_LOG_DIR=/path/to/logs`. Logs/artifacts are gitignored.
 `make test` checks packaging helpers but does **not** build packages.
 
+The synthetic OBS overlay test uses the fixed loopback port 7270. Close an enabled
+overlay before running the suite; tests fail rather than stop an existing service.
+
 Coverage and test-file locations are described in [Architecture](docs/ARCHITECTURE.md).
 
 ### Sanitizers and CMake

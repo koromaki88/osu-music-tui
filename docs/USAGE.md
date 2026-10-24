@@ -52,6 +52,7 @@ handled signals restore terminal settings.
 | `r` | Refresh in background |
 | `d` | Toggle/setup Discord |
 | `L` (uppercase) | Open/setup Last.fm |
+| `O` (uppercase) | Toggle optional OBS browser overlay on loopback port 7270 |
 | `?` / `i` | Open help / selected-track details |
 | `f` / `F` | Toggle selected favorite / favorites-library view |
 | `P` / `b` | Open playlists / browse full library |
@@ -175,6 +176,110 @@ but report collections unavailable. Restart after fixing storage or external edi
 Limits are 128 playlists, 10,000 favorites, 10,000 members per playlist, 50,000 total
 references, an 8 MiB file, and 64 pending edits. Capacity failures leave saved data
 intact. No view, queue, or autoplay state is restored on launch—only the saved lists.
+
+## OBS browser overlay
+
+Press uppercase `O` in the normal library browser to enable the optional overlay.
+It is **off by default**; enablement is remembered in preferences, but playback
+and track state are never restored. The header shows `OBS: on` while enabled.
+Close help/details/playlists or finish text entry before toggling it. `O` is not
+added to the basic keybind footer; it is listed in `?` help.
+
+In OBS, add a **Browser Source**, leave **Local file** unchecked, and set:
+
+- **URL:** `http://127.0.0.1:7270/overlay`
+- **Width / height:** start with **800 × 180** and adjust as desired.
+- **Frame rate:** 15 FPS is sufficient for this non-animated display.
+
+By default the card fills the browser/source width with a 180 px minimum height.
+The page has a transparent canvas with a dark translucent card, Unicode title and
+artist, playback time and pause state. The progress bar is hidden when duration is
+unknown; use `http://127.0.0.1:7270/overlay?progress=0` to hide it always.
+When available, the current beatmap-set cover appears as a square on the left of
+the text. Missing/failed covers hide automatically. No external fonts, remote scripts,
+GUI toolkit or extra application downloads are needed.
+Browser-engine rendering is provided by OBS, not by the player.
+
+The page polls twice per second without animations. Stopping/completing playback
+shows “Nothing playing”; disabling or exiting the player shows “Player disconnected”.
+It reconnects automatically when the player is available again. Restarting does not
+autoplay. Browser-source graphics have not been visually verified in OBS here.
+
+### Customize with overlay.json
+
+The first successful enable creates `~/.config/osu-player/overlay.json` (or
+`$XDG_CONFIG_HOME/osu-player/overlay.json` for an absolute XDG config directory).
+Edit that file in any text editor:
+
+```json
+{
+  "width": null,
+  "height": 180,
+  "font": "Noto Sans",
+  "title_size": 32,
+  "artist_size": 23,
+  "background": "#101218",
+  "background_opacity": 0.85,
+  "text_color": "#ffffff",
+  "accent_color": "#ff78ae",
+  "corner_radius": 14,
+  "show_progress": true,
+  "show_time": true,
+  "show_thumbnail": true,
+  "thumbnail_size": 112
+}
+```
+
+Edits apply automatically within a few seconds to already-open browser/OBS sources,
+without restarting the player or refreshing OBS. Configuration checks run on the
+overlay worker once per second while enabled; the page refreshes style every two
+seconds. Invalid/partially saved edits preserve the entire last valid style and show
+`OBS: style error`. Fix the file to recover automatically. On first load, invalid
+config uses defaults. Existing files are never rewritten, even if malformed;
+deleting the file restores defaults and the next enable recreates it. Missing keys
+use defaults, not values from an earlier edit. An empty object `{}` restores defaults.
+
+| Setting | Meaning / accepted values |
+|---|---|
+| `width` | `null` fills the source viewport (default); integer 200–3840 caps card width in px |
+| `height` | Minimum card height, 0–2160 px; 0 fits content |
+| `font` | Installed font family, up to 128 characters: letters, digits, spaces, hyphens, underscores |
+| `title_size` / `artist_size` | Font size: 8–128 / 8–96 px |
+| `background`, `text_color`, `accent_color` | Six-digit `#RRGGBB`; accent applies to progress |
+| `background_opacity` | 0–1; 0 removes the card background |
+| `corner_radius` | 0–128 px; 0 gives square corners |
+| `show_progress`, `show_time` | JSON `true` or `false` |
+| `show_thumbnail` | `true` by default; `false` hides artwork and suppresses cover URLs |
+| `thumbnail_size` | Square side length, 32–256 px (default 112); cropped with object-fit cover |
+
+The file must be an owned regular file of at most 8 KiB (no symlink/FIFO); unknown
+options and wrong types are rejected. No raw CSS, scripts or external resource URLs
+are accepted. Font names refer to fonts installed where OBS/browser runs.
+
+**OBS sizing:** this config styles the page; it cannot change OBS's Browser Source
+canvas dimensions. Changing that source's Width/Height changes the viewport and
+layout. Resizing/transforming the source in the scene scales the rendered card as
+a whole. `width: null` restores fluid full-width behavior; a numeric value is only
+an optional cap. Keep the source tall enough to avoid clipping large text. You do
+not need Custom CSS, but existing OBS CSS with `!important` can override config styles.
+
+The fixed port **7270** binds to IPv4 loopback only; OBS must run on the same machine
+and network namespace. Use the exact `127.0.0.1` URL, not `localhost` or a LAN address.
+If the port is occupied, the overlay reports an error without interrupting playback;
+free it, then toggle `O` off/on to retry. Two player instances cannot both own it.
+
+**Privacy:** enabling shares display metadata and timing with local clients, including
+other local users. There is no authentication. Cross-origin browser reads are blocked,
+but this is not an isolation boundary against other local applications. No paths,
+filenames, hashes, track/session IDs, credentials, audio, or library search are served.
+With thumbnails enabled, the overlay also shares a public cover URL derived from
+the online beatmap-set ID. OBS/browser fetches it directly over HTTPS from
+`assets.ppy.sh` without a referrer; this reveals your IP and requested set to that
+service. No local files are uploaded. Set `show_thumbnail` to `false` to avoid
+these image requests (an already in-flight request may complete). Offline/local-only
+tracks have no cover; missing artwork never blocks playback.
+OBS recordings/streams may expose your listening activity. Press `O` again to close
+the listener and connected clients; no server is started when disabled by default.
 
 ## Refresh and cache
 

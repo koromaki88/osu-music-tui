@@ -156,7 +156,10 @@ def exercise(executable, root):
     # Unsupported data must remain untouched, with ordinary playback still usable.
     path.write_text('{"version":99}')
     with Session(executable, library, **environment) as session:
-        session.expect("State: stopped", "Collections unavailable")
+        session.expect("State: stopped")
+        session.send("P")
+        session.expect("Collections unavailable", "Playlists")
+        session.send("q")
         session.send("f\n")
         session.expect("State: playing")
         session.send("q")

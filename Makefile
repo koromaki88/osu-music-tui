@@ -21,7 +21,7 @@ ifeq ($(SANITIZE),1)
     LDFLAGS += -fsanitize=address,undefined
 endif
 
-CORE_OBJECTS := obj/library.o obj/library_loader.o obj/storage_path.o obj/track.o obj/player_controller.o obj/playback_events.o obj/discord_presence.o obj/lastfm_client.o obj/lastfm_queue.o obj/lastfm_presence.o obj/library_view.o obj/terminal_text.o obj/library_refresh.o obj/settings.o obj/collections.o obj/collections_file.o obj/collections_model.o
+CORE_OBJECTS := obj/library.o obj/library_loader.o obj/storage_path.o obj/track.o obj/player_controller.o obj/playback_events.o obj/discord_presence.o obj/lastfm_client.o obj/lastfm_queue.o obj/lastfm_presence.o obj/library_view.o obj/terminal_text.o obj/library_refresh.o obj/settings.o obj/collections.o obj/collections_file.o obj/collections_model.o obj/browser_overlay.o obj/overlay_config.o
 AUDIO_OBJECTS := obj/audio_probe.o obj/audio_player.o
 PLAYER_OBJECTS := obj/main.o obj/play_command.o obj/tui_command.o obj/tui_panels.o $(AUDIO_OBJECTS) $(CORE_OBJECTS)
 STORAGE_TEST_OBJECTS := obj/storage_path_test.o $(CORE_OBJECTS)
@@ -37,7 +37,7 @@ DEPENDENCY_FILES := $(PLAYER_OBJECTS:.o=.d) $(STORAGE_TEST_OBJECTS:.o=.d) $(LIBR
 
 .PHONY: all test clean indexer test-indexer test-integration _test _test-indexer _test-integration release appimage appimage-local test-appimage _test-appimage arch-package test-arch-package _test-arch-package clean-appimage-toolchain
 
-all: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-tests bin/player-controller-tests bin/tui-model-tests bin/playback-events-tests bin/discord-presence-tests bin/lastfm-tests bin/lastfm-scrobble-tests bin/collections-tests
+all: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-tests bin/player-controller-tests bin/tui-model-tests bin/playback-events-tests bin/discord-presence-tests bin/lastfm-tests bin/lastfm-scrobble-tests bin/collections-tests bin/browser-overlay-tests
 
 # Separate optimized build: never reuse ordinary/sanitized objects for releases.
 RELEASE_SOURCES := $(wildcard src/*.cpp)
@@ -93,6 +93,9 @@ bin/lastfm-scrobble-tests: $(SCROBBLE_TEST_OBJECTS) | bin
 bin/collections-tests: obj/collections_test.o obj/collections.o obj/collections_file.o obj/collections_model.o obj/library.o obj/track.o obj/storage_path.o | bin
 	$(CXX) $(LDFLAGS) $^ $(shell $(PKG_CONFIG) --libs json-c) -pthread -o $@
 
+bin/browser-overlay-tests: obj/browser_overlay_test.o obj/browser_overlay.o obj/overlay_config.o | bin
+	$(CXX) $(LDFLAGS) $^ $(shell $(PKG_CONFIG) --libs json-c) -pthread -o $@
+
 obj/%.o: src/%.cpp | obj
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
@@ -108,7 +111,7 @@ test test-indexer test-integration test-appimage test-arch-package:
 	@mkdir -p "$(TEST_LOG_DIR)"
 	+@bash -o pipefail -c '$(MAKE) --no-print-directory _$@ 2>&1 | tee "$$1"' _ "$(TEST_LOG_DIR)/$(if $(filter test,$@),tests,$@).log"
 
-_test: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-tests bin/player-controller-tests bin/tui-model-tests bin/playback-events-tests bin/discord-presence-tests bin/lastfm-tests bin/lastfm-scrobble-tests bin/collections-tests
+_test: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-tests bin/player-controller-tests bin/tui-model-tests bin/playback-events-tests bin/discord-presence-tests bin/lastfm-tests bin/lastfm-scrobble-tests bin/collections-tests bin/browser-overlay-tests
 	./bin/storage-path-tests
 	./bin/library-tests
 	./bin/player-controller-tests
@@ -118,11 +121,13 @@ _test: bin/osu-player bin/storage-path-tests bin/library-tests bin/audio-player-
 	./bin/lastfm-tests
 	./bin/lastfm-scrobble-tests
 	./bin/collections-tests
+	./bin/browser-overlay-tests
 	python3 tests/discord_integration.py
 	python3 -m unittest discover -s tests -p 'test_*.py'
 	python3 tests/audio_integration.py
 	python3 tests/tui_integration.py
 	python3 tests/collections_integration.py
+	python3 tests/overlay_integration.py
 	python3 tests/lastfm_integration.py
 	python3 tests/refresh_integration.py
 
@@ -149,3 +154,4 @@ clean:
 -include $(DEPENDENCY_FILES)
 -include $(SCROBBLE_TEST_OBJECTS:.o=.d)
 -include obj/collections_test.d
+-include obj/browser_overlay_test.d

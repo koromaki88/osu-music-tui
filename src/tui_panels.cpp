@@ -45,6 +45,8 @@ std::vector<std::string> panel_content(const InfoPanel& panel, const Collections
             "d: toggle/setup Discord using your Application ID, not a bot token.",
             "L: Last.fm setup. In that panel: c credentials, d disable, x local disconnect.",
             "Last.fm is opt-in; credentials and listening history are private plaintext files.", "",
+            "OBS OVERLAY", "O: toggle browser source at http://127.0.0.1:7270/overlay (off by default).",
+            "Shares title/artist and playback timing with local clients; never paths or credentials.", "",
             "FAVORITES AND PLAYLISTS", "f: toggle favorite. F: favorites/library view. b: full library. P: playlists.",
             "In playlists: c create, a add selected track, r rename, x delete (confirm), Enter browse.",
             "In a playlist browser: u removes selection; < and > move it earlier/later.",

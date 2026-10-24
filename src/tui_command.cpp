@@ -10,6 +10,7 @@
 #include "osu_player/collections.hpp"
 #include "track_details_probe.hpp"
 #include "tui_panels.hpp"
+#include "osu_player/browser_overlay.hpp"
 
 #include <curses.h>
 #include <unistd.h>
@@ -286,7 +287,7 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
             const std::string& notice, const bool colors, const bool refreshing, const std::string& discord_status,
             const DiscordSetup& discord_setup, const LastfmStatus& lastfm_status, const LastfmSetup& lastfm_setup,
             InfoPanel& panel, const CollectionsStatus& collections, const std::string& browse_source,
-            const std::string& queue_source)
+            const std::string& queue_source, const std::string& overlay_label)
 {
     int rows{};
     int columns{};
@@ -303,7 +304,7 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
     }
 
     draw(0, 0, "osu! music player | Discord: " + discord_status + " | Last.fm: " +
-         std::string{lastfm_phase_name(lastfm_status.phase)}, columns, A_BOLD, colors ? 1 : 0);
+         std::string{lastfm_phase_name(lastfm_status.phase)} + overlay_label, columns, A_BOLD, colors ? 1 : 0);
     const std::string summary = "Library: " + std::to_string(player.library().tracks().size()) +
         " | Matches: " + std::to_string(view.matches().size()) +
         " | Shuffle: " + (player.shuffle() ? "on" : "off") +
@@ -513,6 +514,14 @@ int run_tui_command(RefreshOptions options)
         lastfm = std::make_unique<LastfmPresence>(lastfm_credentials_path());
         lastfm->configure(lastfm_enabled);
     } catch (const std::exception&) { }
+    bool overlay_enabled = saved_settings.overlay_enabled;
+    std::unique_ptr<BrowserOverlay> overlay;
+    try {
+        overlay = std::make_unique<BrowserOverlay>(settings_path().parent_path() / "overlay.json");
+        overlay->configure(overlay_enabled);
+    } catch (const std::exception&) { }
+    std::string overlay_status;
+    auto next_overlay_poll = std::chrono::steady_clock::now();
     const bool export_mode = options.export_file.has_value();
     LibraryRefresh refresh{std::move(options)};
     refresh.start(true);
@@ -627,10 +636,23 @@ int run_tui_command(RefreshOptions options)
         view.set_page_size(static_cast<std::size_t>(std::max(1, rows - 10)));
         const auto now = std::chrono::steady_clock::now();
         if (now >= next_frame) {
+            if (overlay && now >= next_overlay_poll) {
+                next_overlay_poll = now + std::chrono::milliseconds{500};
+                if (overlay_enabled) { overlay->publish(player.playback_snapshot()); }
+                const auto status = overlay->status();
+                if (status != overlay_status) {
+                    if (overlay_enabled) { notice = "OBS overlay: " + status; }
+                    overlay_status = status;
+                }
+            }
             render(player, view, searching, settings_warning.empty() ? notice : settings_warning,
                    terminal.colors, refresh.busy(), discord ? discord->status() : "unavailable", discord_setup,
                      lastfm ? lastfm->status() : LastfmStatus{LastfmPhase::error, "Last.fm unavailable", {}}, lastfm_setup, panel,
-                     collections, source_name(), queue_source);
+                      collections, source_name(), queue_source,
+                      !overlay_enabled ? "" : " | OBS: " + (!overlay ? std::string{"unavailable"} :
+                          overlay_status.find("style warning:") != std::string::npos ? std::string{"style error"} :
+                          overlay_status.starts_with("http://") ? std::string{"on"} :
+                          overlay_status.starts_with("unavailable") ? std::string{"unavailable"} : std::string{"starting"}));
             next_frame = now + std::chrono::milliseconds{100};
         }
         wint_t key{};
@@ -723,6 +745,14 @@ int run_tui_command(RefreshOptions options)
                             (void)view.select_index(*current);
                         }
                     } else { notice = "No current track to jump to."; }
+                } else if (result != KEY_CODE_YES && key == 'O') {
+                    overlay_enabled = !overlay_enabled;
+                    if (overlay) {
+                        overlay->publish(player.playback_snapshot());
+                        overlay->configure(overlay_enabled);
+                        notice = overlay_enabled ? "OBS overlay: starting on 127.0.0.1:7270" : "OBS overlay: off";
+                    } else { notice = "OBS overlay unavailable (worker could not start)"; }
+                    next_overlay_poll = std::chrono::steady_clock::now();
                 } else if (result != KEY_CODE_YES && key == 'L') {
                     if (lastfm) {
                         lastfm_enabled = true;
@@ -771,7 +801,7 @@ int run_tui_command(RefreshOptions options)
         if (discord) { discord->publish(playback_events, player.playback_snapshot()); }
         if (lastfm) { lastfm->publish(playback_events, player.playback_snapshot()); }
         const Settings current_settings{player.volume(), player.shuffle(), player.repeat(),
-                                         searching ? saved_query : view.query(), discord_enabled, discord_application_id, lastfm_enabled};
+                                         searching ? saved_query : view.query(), discord_enabled, discord_application_id, lastfm_enabled, overlay_enabled};
         if (settings_writable && current_settings != saved_settings) {
             try {
                 save_settings(*config_path, current_settings);

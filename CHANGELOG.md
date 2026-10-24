@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.6.0
+
+- Added square public beatmap-cover thumbnails to the left of the OBS overlay text,
+  with live `show_thumbnail`/`thumbnail_size` settings and missing-image fallback.
+- Added live overlay appearance configuration in `overlay.json`: sizing, installed
+  font, colors/opacity, corner radius and time/progress visibility. Invalid edits
+  retain the last valid style. Restored fluid full-width cards by default; a numeric
+  `width` is an optional cap and `null` follows the browser/source viewport.
+- Added an opt-in OBS Browser Source at `http://127.0.0.1:7270/overlay`, toggled
+  with uppercase `O` and remembered in preferences. Shows title/artist, pause/idle
+  state and optional progress without exposing local paths or credentials.
+- Added bounded background HTTP handling, local-origin checks, reconnect/disconnect
+  behavior, and synthetic overlay/privacy/responsiveness regressions.
+
+## 0.5.1
+
 - Added uppercase `J` to reveal/select the current track without changing playback
   or its queue; hidden tracks open in the full library with search cleared.
 
