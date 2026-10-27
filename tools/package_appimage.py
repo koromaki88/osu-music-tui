@@ -17,6 +17,7 @@ from check_ca_bundle import check_ca_bundle
 
 ROOT = Path(__file__).resolve().parent.parent
 VERSION = (ROOT / "VERSION").read_text().strip()
+APPIMAGE_NAME = f"osu-music-player-{VERSION}-x86_64.AppImage"
 TOOL_URL = "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage"
 TOOL_SHA256 = "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
 RUNTIME_VERSION = "10.0.13"
@@ -270,7 +271,7 @@ def build(options):
         with tool_image.open("rb") as stream:
             runtime.write_bytes(stream.read(offset))
         run([tool_image, "--appimage-extract"], cwd=work, stdout=subprocess.DEVNULL)
-        packed = work / "osu-player-x86_64.AppImage"
+        packed = work / APPIMAGE_NAME
         run([work / "squashfs-root/AppRun", "--no-appstream", "--runtime-file", runtime,
              "--mksquashfs-opt", "-processors", "--mksquashfs-opt", "2", appdir, packed],
               env=dict(os.environ, ARCH="x86_64", VERSION=VERSION))
@@ -285,7 +286,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--player-binary", default="artifacts/release/osu-player")
     parser.add_argument("--dotnet", default="dotnet")
-    parser.add_argument("--output", default="artifacts/dist/osu-player-x86_64.AppImage")
+    parser.add_argument("--output", default=str(ROOT / "artifacts/dist" / APPIMAGE_NAME))
     options = parser.parse_args()
     try:
         build(options)

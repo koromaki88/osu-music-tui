@@ -11,10 +11,11 @@ import subprocess
 import tempfile
 import uuid
 
+from package_appimage import APPIMAGE_NAME
+
 
 ROOT = Path(__file__).resolve().parent.parent
-FILES = ("osu-player-x86_64.AppImage", "osu-player-x86_64.AppImage.sha256",
-         "osu-player-x86_64.AppImage.manifest.json")
+FILES = (APPIMAGE_NAME, APPIMAGE_NAME + ".sha256", APPIMAGE_NAME + ".manifest.json")
 TOOLCHAIN = "osu-player-appimage-toolchain:net10-debian12"
 SMOKE_IMAGE = "debian:bookworm-slim@sha256:a4672c0cb26fbdde88e38fa2dfb6c681942306680e41e4378b28770b6e79ee91"
 
@@ -76,10 +77,10 @@ def build(engine, output):
         run_container(engine, TOOLCHAIN, [(source, "/input", "ro"), (staging, "/output", "rw")],
                       ["python3", "/input/tools/run_appimage_build.py", "--output", "/output"])
         # No SDK or application libraries are installed in the smoke image.
-        run_container(engine, SMOKE_IMAGE, [(staging, "/input", "ro")], ["sh", "-eu", "-c", """
+        run_container(engine, SMOKE_IMAGE, [(staging, "/input", "ro")], ["sh", "-eu", "-c", f"""
 cd "$(mktemp -d)"
-/input/osu-player-x86_64.AppImage --appimage-extract-and-run --help
-/input/osu-player-x86_64.AppImage --appimage-extract > /dev/null
+/input/{APPIMAGE_NAME} --appimage-extract-and-run --help
+/input/{APPIMAGE_NAME} --appimage-extract > /dev/null
 LD_LIBRARY_PATH="$PWD/squashfs-root/usr/lib" \
   ./squashfs-root/usr/lib/osu-player/indexer/osu-indexer --osu-dir /input/fixture > library.ndjson
 ./squashfs-root/AppRun library library.ndjson

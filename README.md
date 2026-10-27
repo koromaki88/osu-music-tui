@@ -12,8 +12,8 @@ music, stream playback, shuffle, repeat, and optionally connect Discord or Last.
 ### AppImage
 
 ```bash
-chmod +x osu-player-x86_64.AppImage
-./osu-player-x86_64.AppImage tui
+chmod +x osu-music-player-0.6.1-x86_64.AppImage
+./osu-music-player-0.6.1-x86_64.AppImage tui
 ```
 
 Requires Linux x86-64, glibc 2.36+, a UTF-8 locale, and working host audio. The

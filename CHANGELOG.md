@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- AppImage builds now use `osu-music-player-<VERSION>-x86_64.AppImage` and matching
+  checksum/manifest filenames, with the release number read from `VERSION`.
 ## 0.6.1
 
 - Added `m` to mute/unmute independently of the volume setting, with a muted status

@@ -43,12 +43,14 @@ A minimal-image smoke test checks standalone indexing and CA fallback selection.
 ### Outputs
 
 ```text
-artifacts/dist/osu-player-x86_64.AppImage
-artifacts/dist/osu-player-x86_64.AppImage.sha256
-artifacts/dist/osu-player-x86_64.AppImage.manifest.json
+artifacts/dist/osu-music-player-0.6.1-x86_64.AppImage
+artifacts/dist/osu-music-player-0.6.1-x86_64.AppImage.sha256
+artifacts/dist/osu-music-player-0.6.1-x86_64.AppImage.manifest.json
 ```
 
-Outputs replace prior files only after tests, checksum, and baseline checks pass.
+The filename uses `osu-music-player-<VERSION>-x86_64.AppImage`, reading the release
+number from the root `VERSION` file. Different versions coexist; rebuilding the same
+version replaces its files only after tests, checksum, and baseline checks pass.
 Preserve previous candidates before building. Embedded notices/manifest record native
 library hashes/packages and runtime/glibc versions; collected licenses alone do not
 satisfy redistribution obligations.

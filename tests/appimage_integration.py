@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 from check_ca_bundle import check_ca_bundle
+from package_appimage import APPIMAGE_NAME
 
 from tui_integration import Session, exercise_settings, exercise_ui, exercise_lastfm_setup, write_library
 from discord_integration import tui_tests as exercise_discord
@@ -33,7 +34,7 @@ def fingerprint(root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--appimage", type=Path, default=ROOT / "artifacts/dist/osu-player-x86_64.AppImage")
+    parser.add_argument("--appimage", type=Path, default=ROOT / "artifacts/dist" / APPIMAGE_NAME)
     parser.add_argument("--dotnet", default="dotnet")
     options = parser.parse_args()
     image = options.appimage.resolve()

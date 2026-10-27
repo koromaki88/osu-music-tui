@@ -2,7 +2,7 @@
 
 [README](../README.md) · [Discord and Last.fm](INTEGRATIONS.md)
 
-Examples use `osu-player`; substitute `./osu-player-x86_64.AppImage` for an AppImage
+Examples use `osu-player`; substitute `./osu-music-player-0.6.1-x86_64.AppImage` for an AppImage
 or `./bin/osu-player` for a source build.
 
 ## Open a library
@@ -345,9 +345,9 @@ credentials or listening-history files.
 ## AppImage without FUSE
 
 ```bash
-./osu-player-x86_64.AppImage --appimage-extract-and-run tui
+./osu-music-player-0.6.1-x86_64.AppImage --appimage-extract-and-run tui
 # Or extract once to avoid decompression on every launch:
-./osu-player-x86_64.AppImage --appimage-extract
+./osu-music-player-0.6.1-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun tui
 ```
 

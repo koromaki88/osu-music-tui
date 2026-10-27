@@ -24,6 +24,11 @@ builder_spec.loader.exec_module(builder)
 
 
 class PackagingTests(unittest.TestCase):
+    def test_appimage_name_includes_shared_version(self):
+        version = (packaging.ROOT / "VERSION").read_text().strip()
+        name = f"osu-music-player-{version}-x86_64.AppImage"
+        self.assertEqual(packaging.APPIMAGE_NAME, name)
+        self.assertEqual(builder.FILES, (name, name + ".sha256", name + ".manifest.json"))
     def test_ca_bundle_gate(self):
         with tempfile.TemporaryDirectory() as directory:
             bundle = Path(directory) / "bundle.pem"
@@ -101,7 +106,7 @@ class PackagingTests(unittest.TestCase):
                     return subprocess.CompletedProcess(arguments, 0)
 
                 with patch.object(builder.subprocess, "run", side_effect=build_toolchain) as commands, \
-                        patch.object(builder, "run_container", side_effect=container), \
+                        patch.object(builder, "run_container", side_effect=container) as containers, \
                         patch("builtins.print"):
                     if accepted:
                         builder.build("docker", output)
@@ -112,6 +117,8 @@ class PackagingTests(unittest.TestCase):
                         self.assertEqual(previous.read_bytes(), b"previous working image")
                     self.assertEqual(commands.call_count, 1, "only the toolchain is built as an image")
                     self.assertIn(builder.TOOLCHAIN, commands.call_args.args[0])
+                    smoke_script = containers.call_args_list[1].args[3][-1]
+                    self.assertIn(f"/input/{packaging.APPIMAGE_NAME} --appimage-extract", smoke_script)
                     self.assertEqual(sorted(path.name for path in output.iterdir()),
                                      sorted(builder.FILES) if accepted else [builder.FILES[0]])
 
