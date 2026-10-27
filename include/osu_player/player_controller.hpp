@@ -48,6 +48,7 @@ public:
     // Close the active play session on normal frontend exit, without rewinding.
     void shutdown();
     void set_volume(float volume);
+    void set_muted(bool muted);
     void set_shuffle(bool enabled);
     void set_repeat(RepeatMode mode) noexcept;
     // Keeps the loaded stream untouched when stable ID + hash survives. If it
@@ -64,6 +65,7 @@ public:
     [[nodiscard]] AudioPlayer::Milliseconds position() const noexcept;
     [[nodiscard]] std::optional<AudioPlayer::Milliseconds> duration() const noexcept;
     [[nodiscard]] float volume() const noexcept;
+    [[nodiscard]] bool muted() const noexcept;
     [[nodiscard]] PlaybackErrors take_errors();
     [[nodiscard]] const std::optional<PlaybackSnapshot>& playback_snapshot() const noexcept;
     [[nodiscard]] PlaybackEvents take_playback_events();
@@ -88,6 +90,8 @@ private:
     PlayerState state_{PlayerState::empty};
     RepeatMode repeat_{RepeatMode::off};
     bool shuffle_{};
+    float volume_{0.7F};
+    bool muted_{};
     PlaybackErrors errors_;
     PlaybackMonitor playback_;
 };

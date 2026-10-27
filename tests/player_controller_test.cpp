@@ -437,6 +437,35 @@ void test_library_refresh()
     check(player.state() == PlayerState::stopped && !player.current_index(), "nonempty refresh never autoplays");
 }
 
+void test_mute()
+{
+    Fixture fixture{3};
+    auto& player = fixture.controller;
+    player.set_volume(0.3F);
+    player.play();
+    const auto session = player.playback_snapshot()->session_id;
+    const auto queue = player.queue();
+    (void)player.take_playback_events();
+    player.set_muted(true);
+    check(player.muted() && player.volume() == 0.3F && fixture.audio->volume() == 0.0F, "mute preserves selected volume but silences backend");
+    check(player.state() == PlayerState::playing && player.queue() == queue &&
+        player.playback_snapshot()->session_id == session && player.take_playback_events().events.empty(), "mute leaves transport and listening session unchanged");
+    player.set_volume(0.5F);
+    check(player.volume() == 0.5F && fixture.audio->volume() == 0.0F, "changing volume while muted keeps output silent");
+    bool rejected{};
+    try { player.set_volume(2.0F); } catch (const std::invalid_argument&) { rejected = true; }
+    check(rejected && player.volume() == 0.5F && player.muted(), "invalid volume rejected even while muted");
+    player.next();
+    player.replace_library(make_library(3));
+    check(player.muted() && fixture.audio->volume() == 0.0F, "track changes and refresh retain mute");
+    player.pause();
+    player.set_muted(false);
+    check(!player.muted() && fixture.audio->volume() == 0.5F && player.state() == PlayerState::paused, "unmute restores volume without resuming");
+    player.set_volume(0.0F);
+    player.set_muted(true); player.set_muted(false);
+    check(player.volume() == 0.0F && fixture.audio->volume() == 0.0F, "unmute never invents volume when chosen level is zero");
+}
+
 }  // namespace
 
 int main()
@@ -444,6 +473,7 @@ int main()
     try {
         test_empty_and_bounds();
         test_transport();
+        test_mute();
         test_eof_and_repeat();
         test_shuffle();
         test_scoped_queue();

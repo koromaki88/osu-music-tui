@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+## 0.6.1
+
+- Added `m` to mute/unmute independently of the volume setting, with a muted status
+  indicator and panel support. Mute is session-only; volume preferences stay intact.
 - Display the release version beside the TUI title; Make/CMake, Last.fm user agent
   and package versions now derive from the shared `VERSION` file.
+
 ## 0.6.0
 
 - Added square public beatmap-cover thumbnails to the left of the OBS overlay text,

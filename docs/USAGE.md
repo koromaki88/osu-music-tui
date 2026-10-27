@@ -46,6 +46,7 @@ handled signals restore terminal settings.
 | `n` / `p` | Next/previous in queue |
 | Left / Right, `h` / `l` | Seek backward/forward five seconds |
 | `+` / `-` | Volume in 5% steps |
+| `m` | Mute/unmute without changing the volume setting |
 | `s` | Toggle shuffle |
 | `R` | Cycle repeat off → one → all |
 | `x` | Stop and rewind |
@@ -60,6 +61,15 @@ handled signals restore terminal settings.
 | `/` | Edit search |
 | Esc | Clear filter outside search mode |
 | `q` | Quit outside search mode |
+
+### Mute
+
+Mute is session-only and does not pause playback, reset the track, or change the
+saved volume. While muted, `+`/`-` adjust the chosen volume but output stays muted;
+unmuting uses that level. The status line shows `(muted)` beside the percentage.
+Like volume changes, mute affects newly queued audio (roughly 120 ms output buffering).
+It also works in help/details/playlists panels, but not while entering text or
+confirming deletion.
 
 ### Search
 

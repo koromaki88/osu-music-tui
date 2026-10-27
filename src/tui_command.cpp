@@ -365,7 +365,8 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
     const auto duration = player.duration();
     draw(rows - 5, 0, "State: " + std::string{state_name(player.state())} + " | " +
          format_time(player.position()) + " / " + (duration ? format_time(*duration) : "--:--") +
-         " | Volume: " + std::to_string(static_cast<int>(player.volume() * 100.0F + 0.5F)) + "% | Queue: " + queue_source, columns);
+         " | Volume: " + std::to_string(static_cast<int>(player.volume() * 100.0F + 0.5F)) + "%" +
+         (player.muted() ? " (muted)" : "") + " | Queue: " + queue_source, columns);
     const int bar_width = columns - 4;
     const double fraction = duration && duration->count() > 0
         ? std::clamp(static_cast<double>(player.position().count()) / static_cast<double>(duration->count()), 0.0, 1.0)
@@ -388,7 +389,7 @@ void render(const PlayerController& player, const LibraryView& view, const bool 
           discord_setup.active ? "Copy its Application ID. Playback continues while you edit." :
           panel.kind == InfoPanel::Kind::playlists ? "c new  a add  r rename  x delete  Enter browse  b all" :
           panel.kind != InfoPanel::Kind::none ? "? help  i details | Enter does not play while a panel is open" :
-           "h/l seek  +/- volume  / search  s shuffle  R repeat", columns);
+           "h/l seek  +/- volume  m mute  / search  s shuffle  R repeat", columns);
     wnoutrefresh(stdscr);
     doupdate();
 }
@@ -433,6 +434,7 @@ bool normal_key(const wint_t key, const bool special, PlayerController& player,
         case 'x': player.stop(); break;
         case '+': case '=': player.set_volume(std::min(1.0F, player.volume() + 0.05F)); break;
         case '-': player.set_volume(std::max(0.0F, player.volume() - 0.05F)); break;
+        case 'm': player.set_muted(!player.muted()); break;
         case 's': player.set_shuffle(!player.shuffle()); break;
         case 'R':
             player.set_repeat(player.repeat() == RepeatMode::off ? RepeatMode::one :

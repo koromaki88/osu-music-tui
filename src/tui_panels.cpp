@@ -39,7 +39,7 @@ std::vector<std::string> panel_content(const InfoPanel& panel, const Collections
             "Search: Backspace removes a character; Ctrl-U clears. Filtering does not change the queue.", "",
             "PLAYBACK", "Space: pause/resume (start selection if nothing is loaded).",
             "n/p: next/previous in queue (including shuffle). Left/Right or h/l: seek five seconds. +/-: volume.",
-            "s: toggle shuffle. R: repeat off/one/all. x: stop and rewind.",
+            "s: toggle shuffle. R: repeat off/one/all. x: stop and rewind. m: mute/unmute (keeps volume).",
             "Playback never starts automatically on launch.", "",
             "LIBRARY AND INTEGRATIONS", "r: refresh. Close lazer first; live database snapshots are unsupported.",
             "d: toggle/setup Discord using your Application ID, not a bot token.",
@@ -54,7 +54,7 @@ std::vector<std::string> panel_content(const InfoPanel& panel, const Collections
             "Edits affect the browser/saved list; the active queue is a snapshot until Enter plays a list again.", "",
             "PANELS", "?: help. i: selected-track details. Metadata is a snapshot; duration loads in background.",
             "j/k, arrows, PageUp/PageDown, Home/End: scroll this panel, not the library.",
-            "Space, n/p, Left/Right or h/l, and +/- still control playback. Other library actions are blocked.",
+            "Space, n/p, Left/Right or h/l, +/-, and m still control playback. Other library actions are blocked.",
             "Esc or q: close panel. Outside panels/search: q quits.",
             "Resize at any time; text reflows. Below 50x14, resize to restore the panel."
         };
@@ -83,7 +83,7 @@ std::vector<std::string> panel_content(const InfoPanel& panel, const Collections
 bool panel_transport_key(const wint_t key, const bool special)
 {
     return special ? key == KEY_LEFT || key == KEY_RIGHT :
-        key == ' ' || key == '+' || key == '=' || key == '-' || key == 'h' || key == 'l' || key == 'n' || key == 'p';
+        key == ' ' || key == '+' || key == '=' || key == '-' || key == 'h' || key == 'l' || key == 'n' || key == 'p' || key == 'm';
 }
 
 PlaylistAction playlist_key(const wint_t key, const bool special, InfoPanel& panel, const Collections& collections)

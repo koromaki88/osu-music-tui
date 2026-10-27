@@ -1,6 +1,7 @@
 #include "osu_player/player_controller.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 #include <stdexcept>
 #include <utility>
@@ -15,6 +16,7 @@ PlayerController::PlayerController(Library library, std::unique_ptr<AudioPlayer>
     if (!audio_) {
         throw std::invalid_argument{"playback controller requires an audio backend"};
     }
+    volume_ = audio_->volume();
     queue_.resize(library_.tracks().size());
     failed_tracks_.resize(queue_.size(), false);
     std::iota(queue_.begin(), queue_.end(), std::size_t{0});
@@ -213,7 +215,18 @@ void PlayerController::shutdown()
     if (state_ == PlayerState::playing) { state_ = PlayerState::paused; }
 }
 
-void PlayerController::set_volume(const float volume) { audio_->set_volume(volume); }
+void PlayerController::set_volume(const float volume)
+{
+    if (!std::isfinite(volume) || volume < 0.0F || volume > 1.0F) { throw std::invalid_argument{"invalid volume"}; }
+    audio_->set_volume(muted_ ? 0.0F : volume);
+    volume_ = volume;
+}
+void PlayerController::set_muted(const bool muted)
+{
+    if (muted == muted_) { return; }
+    audio_->set_volume(muted ? 0.0F : volume_);
+    muted_ = muted;
+}
 
 void PlayerController::set_shuffle(const bool enabled)
 {
@@ -324,7 +337,8 @@ std::optional<AudioPlayer::Milliseconds> PlayerController::duration() const noex
     return cursor_ ? audio_->duration() : std::nullopt;
 }
 
-float PlayerController::volume() const noexcept { return audio_->volume(); }
+float PlayerController::volume() const noexcept { return volume_; }
+bool PlayerController::muted() const noexcept { return muted_; }
 
 PlaybackErrors PlayerController::take_errors()
 {

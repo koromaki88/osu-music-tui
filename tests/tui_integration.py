@@ -238,10 +238,20 @@ def exercise_ui(executable, library):
         session.expect(">   1")
         session.send("\n")
         session.expect("State: playing", "Now: Artist — Alpha 日本")
+        session.send("m")
+        session.expect("Volume: 70% (muted)", "State: playing")
+        session.send("+")
+        session.expect("Volume: 75% (muted)")
+        session.send("-m")
+        session.expect("Volume: 70% | Queue:", "State: playing")
         session.send(" ")
         session.expect("State: paused")
         session.send("?")
         session.expect("Help", "BROWSE AND SEARCH", "State: paused")
+        session.send("m")
+        session.expect("Volume: 70% (muted)", "State: paused")
+        session.send("m")
+        session.expect("Volume: 70% | Queue:", "State: paused")
         session.send("G")
         session.expect("PANELS", "q: close panel")
         session.resize(14, 50)
@@ -444,12 +454,16 @@ def exercise_settings(executable, library, root):
         assert abs(saved["volume"] - 0.6) < 0.001 and saved["shuffle"] and saved["repeat"] == "all"
         assert saved["search"] == "Bêta"
         assert path.stat().st_mode & 0o777 == 0o600
+        session.send("m")
+        session.expect("Volume: 60% (muted)")
+        assert abs(json.loads(path.read_text())["volume"] - 0.6) < 0.001, "mute must not persist zero volume"
         session.send("/uncommitted")
         session.process.send_signal(signal.SIGTERM)
         session.finish(128 + signal.SIGTERM)
     with Session(executable, library, **environment) as session:
         session.expect("Volume: 60%", "Shuffle: on", "Repeat: all", "Search: Bêta", "Matches: 1",
                        "State: stopped", "Now: No track selected")
+        session.expect("Volume: 60% | Queue:")  # Mute itself is not restored.
         session.send("\x1b")
         session.expect("Matches: 3")
         session.send("q")

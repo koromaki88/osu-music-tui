@@ -10,6 +10,40 @@ All package validation used synthetic libraries/audio and fake services only.
 It did not launch the game, scan a real library, install or publish packages,
 or create commits/tags.
 
+## 0.6.1 — independent mute and shared release version
+
+Both formats were rebuilt and passed package validation. Native `make -j4 test`
+and synthetic `make test-indexer` passed first and within the builds. Extracted UI
+tests verify the `v0.6.1` header, mute indicator, adjustments while muted, panel
+controls and preservation of saved volume without restoring mute on restart.
+Controller tests cover backend silence, session/queue preservation, track changes,
+refresh, paused unmute and a selected volume of zero.
+
+| Artifact | Size | Result |
+|---|---|---|
+| `artifacts/dist/osu-player-x86_64.AppImage` | 101.3 MiB | Passed `make test-appimage` |
+| `artifacts/arch/osu-music-player-0.6.1-1-x86_64.pkg.tar.zst` | 4.5 MiB | Passed `make test-arch-package` with private SDK / `--nodeps` |
+
+- **AppImage SHA-256:** `2230ccd6ce7731ba903a5d1ccef13fc9231a1b82b993eac50f068036bc32ae9d`
+- **Arch SHA-256:** `8ab836f56c57e074262afbdcd219d9b142cc0c9a7862a5652907b4a750f24230`
+- **Evidence:** `artifacts/releases/0.6.1/verified-artifacts.json`, `logs/`, `arch-logs/`.
+  Both exported checksums were independently verified; `.PKGINFO` and AppImage
+  manifest versions match the shared `VERSION` file.
+- **Release notes:** `artifacts/releases/0.6.1/release-notes.md`.
+- **Previous artifacts:** 0.6.0 image/checksum/manifest preserved under
+  `artifacts/releases/0.6.0/appimage/`, Arch recipe under `0.6.0/arch/`, and older
+  versioned Arch packages/source snapshots left untouched.
+
+Existing synthetic coverage also passed for collections, refresh, overlay config,
+fake Discord and isolated Last.fm HTTPS. AppImage standalone minimal-container
+indexing and CA fallback selection/gate passed. Its baseline remains x86-64/glibc
+2.36 with .NET runtime 10.0.13. Profiling harnesses are not bundled in the packages.
+
+Arch installation/pacman dependency resolution, AppImage FUSE mounting and CMake/Ninja
+remain unverified. No game launch, real-library scan, installation or publication
+occurred. Public distribution remains blocked on licensing/compliance review.
+This record was added after building and is not embedded in the candidates.
+
 ## 0.6.0 — optional OBS overlay
 
 Both formats were rebuilt and passed package validation. Native `make -j4 test`
